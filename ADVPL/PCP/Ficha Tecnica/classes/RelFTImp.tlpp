@@ -1,0 +1,391 @@
+#include 'totvs.ch'
+#include 'topconn.ch'
+
+static ALINHADO_ESQUERDA    := 0
+static ALINHADO_DIREITA     := 1
+static CENTRALIZADO         := 2
+
+static RGB_RED := RGB(255,0,0)
+static RGB_BLUE:= rgb(91, 155, 213)
+static DEF_PRODUTO := "1"
+static CFG_MAQUINA := "2"
+static IMAGENS     := "3"
+static OBSERVACOES := "4"
+
+class RelFTImp
+
+	static method impDefProdutos()
+	static method impDefObservacoes()
+	static method impDefImagens()
+	static method getTamanhoImg()
+	static method topMargin()
+	static method queryRel()
+endclass
+
+method impDefProdutos() class RelFTImp
+	local oColAttr      := nil
+	local oColResp      := nil
+	local oColAttr1     := ColumnFwMsPrinter():new(/*nCMLargura*/,/*xString*/,oFont12N/*oFont*/,/*nAlign*/,/*oBrush*/,/*nColorText*/)
+	local oColResp1     := ColumnFwMsPrinter():new(/*nCMLargura*/,/*xString*/,oFont12N/*oFont*/,CENTRALIZADO/*nAlign*/,/*oBrush*/,RGB_RED/*nColorText*/)
+	local oColAttr2     := ColumnFwMsPrinter():new(/*nCMLargura*/,/*xString*/,oFont12N/*oFont*/,/*nAlign*/,/*oBrush*/,/*nColorText*/)
+	local oColResp2     := ColumnFwMsPrinter():new(/*nCMLargura*/,/*xString*/,oFont12N/*oFont*/,CENTRALIZADO/*nAlign*/,/*oBrush*/,RGB_RED/*nColorText*/)
+	local aLine         := {}
+	local nDeArtigo     := 0
+	local nAteArtigo    := 0
+	local nQtdArtigo    := len(aDefProdutos)
+	local nQtd2Artigo   := ceiLing(nQtdArtigo/2)
+	local nQtdWhile     := if(nQtdArtigo > 1,2,1)
+	local nArtigo       := 0
+	local cTitulo       := ""
+	local oPrintGrid    := nil
+	local oColumn       := nil
+
+	if nQtdArtigo > 0
+		cTitulo := aDefProdutos[1,3]
+		oPrintGrid := GridFwMsPrinter():new(0.6/*nTamBox*/,1/*nCMIniGrid*/,oPrint:getLineCM()+0.2/*nCMPageAtual*/,oPrint:getCMVertical()/*nLimPage*/,.t./*lImpCabec*/,{||addPage()}/*bNewPage*/,0.40/*nRecuoSayAlign*/)
+
+		oColumn := ColumnFwMsPrinter():new(19,cTitulo,oFont12N,CENTRALIZADO/*nAlignHeader*/,/*oBlueBrush*/)
+		oPrintGrid:addCell(oColumn)
+
+		nLinAtual := oPrintGrid:print(oPrint,/*cPixel*/)
+
+		oPrint:setLine(nLinAtual,.t./*lConv*/)
+	endif
+
+	oPrintGrid := GridFwMsPrinter():new(0.6/*nTamBox*/,1/*nCMIniGrid*/,oPrint:getLineCM()/*nCMPageAtual*/,oPrint:getCMVertical()/*nLimPage*/,.F./*lImpCabec*/,{||addPage()}/*bNewPage*/,0.40/*nRecuoSayAlign*/)
+
+	oColumn := ColumnFwMsPrinter():new(4.85,"ATRIBUTO",oFont12N,CENTRALIZADO/*nAlignHeader*/,/*oBlueBrush*/)
+	oPrintGrid:addCell(oColumn)
+
+	oColumn := ColumnFwMsPrinter():new(4.65,"RESPOSTA",oFont12N,CENTRALIZADO/*nAlignHeader*/,/*oBlueBrush*/,RGB_RED)
+	oPrintGrid:addCell(oColumn)
+
+	oColumn := ColumnFwMsPrinter():new(4.75,"ATRIBUTO",oFont12N,CENTRALIZADO/*nAlignHeader*/,/*oBlueBrush*/)
+	oPrintGrid:addCell(oColumn)
+
+	oColumn := ColumnFwMsPrinter():new(4.75,"RESPOSTA",oFont12N,CENTRALIZADO/*nAlignHeader*/,/*oBlueBrush*/,RGB_RED)
+	oPrintGrid:addCell(oColumn)
+
+	while nQtdWhile > 0
+		if nQtdWhile == 2
+			oColAttr    := oColAttr1
+			oColResp    := oColResp1
+			nDeArtigo   := 1
+			nAteArtigo  := nQtd2Artigo
+		else
+			oColAttr := oColAttr2
+			oColResp := oColResp2
+			nDeArtigo   := nQtd2Artigo + 1
+			nAteArtigo  := nQtdArtigo
+		endif
+
+		for nArtigo := nDeArtigo to nAteArtigo
+			oColAttr:addText(aDefProdutos[nArtigo][1],.t.)
+			xString := aDefProdutos[nArtigo][2]
+			if valType(xString) == "A"
+				aEval(xString,{ |cString| oColResp:addText(alltrim(cString),.t.)})
+			else
+				oColResp:addText(alltrim(xString),.t.)
+			endif
+
+		next nArtigo
+
+		nQtdWhile--
+	enddo
+
+	aAdd(aLine,oColAttr1)
+	aAdd(aLine,oColResp1)
+	aAdd(aLine,oColAttr2)
+	aAdd(aLine,oColResp2)
+
+	oPrintGrid:addLine(aLine)
+
+	nLinAtual := oPrintGrid:print(oPrint,/*cPixel*/)
+
+	oPrint:setLine(nLinAtual+0.2,.t./*lConv*/)
+return
+
+method impDefObservacoes(aObserv) class RelFTImp
+	local oFont14  := TFont():New("Times New Roman",14,14,,.f.)
+	local oFont14N := TFont():New("Times New Roman", 14, 14, , .T.)
+	local nObs     := 0
+	local nLine    := oPrint:getLineCM() + 0.2
+	local aObs     := {}
+	default aObserv := aObservacoes
+
+	for nObs := 1 to len(aObserv)
+		aObs    := aObserv[nObs][2]
+		if len(aObs) == 1 .and. empty(aObs[1])
+			loop
+		endif
+		oPCabec := GridFwMsPrinter():new(0.4/*nTamBox*/,1/*nCMIniGrid*/,nLine/*nCMPageAtual*/,oPrint:getCMVertical()/*nLimPage*/,.t./*lImpCabec*/,{||addPage()}/*bNewPage*/,0.40/*nRecuoSayAlign*/)
+
+		oColumn := ColumnFwMsPrinter():new(19,"OBSERVAÇÕES",oFont14N,ALINHADO_ESQUERDA/*nAlignHeader*/,oBlueBrush)
+		oPCabec:addCell(oColumn)
+
+		oColumn := ColumnFwMsPrinter():new(19,aObs,oFont14,ALINHADO_ESQUERDA/*nAlignHeader*/,/*oBlueBrush*/)
+		oPCabec:addLine({oColumn})
+		nLine := oPCabec:print(oPrint,/*cPixel*/)
+		oPrint:setLine(nLine,.t.)
+	next nObs
+return
+
+method impDefImagens() class RelFTImp
+	local nImagem        := 0
+	local cFile          := "\RelFTImp"+FwTimeStamp()
+	local cEntry         := ""
+	local nImgAltura     := 0
+	local nImgLargura    := 0
+	local nCMIniGrid     := 1
+	local nLenBox        := 0
+	local aFiles         := {}
+	local nLargRel       := 19
+	local nLargTotal     := 0
+	local nMaiorAltura   := 0
+	local nPercentual    := 1
+	
+	oPrint:sumLine(0.2,.t.)
+
+	for nImagem := 1 to len(aImagens)
+		cTitulo := alltrim(aImagens[nImagem][1])
+		cEntry  := aImagens[nImagem][2]
+		cFile += "_" + cEntry + ".jpg"
+		repExtract(cEntry ,cFile)
+
+		aTamanho    := RelFTImp():getTamanhoImg(cFile,/*nAltura*/,19/*nLargRel*/,)
+		//aTamanho 	:= ImageSizeNode(cFile)
+		nImgAltura  := aTamanho[1] // * 0.90
+		nImgLargura := aTamanho[2]
+		nLargTotal += nImgLargura
+
+		if nImgAltura > nMaiorAltura
+			nMaiorAltura := nImgAltura
+		endif
+		aAdd(aFiles,{cFile,cTitulo,nImgAltura,nImgLargura})
+	next nImagem
+
+	//centraliza box
+	if nLargTotal < nLargRel
+		nCMColumn := 1 + ((nLargRel - nLargTotal) / 2)
+		nCMIniGrid := nCMColumn -0.01
+	endif
+
+	for nImagem := 1 to len(aFiles)
+		cFile       := aFiles[nImagem][1]
+		cTitulo     := alltrim(aFiles[nImagem][2])
+		nImgAltura  := aFiles[nImagem][3]
+		nImgLargura := aFiles[nImagem][4]
+
+		if nLargTotal > nLargRel
+			nPercentual := nImgLargura / nLargTotal
+			nImgLargura := nLargRel * nPercentual
+		endif
+
+		nLenBox     := nImgLargura
+
+		if !oPrint:isPrint(nImgAltura+0.7)
+			oPrint:setLine(addPage(),.t.)
+		endif
+
+		oPCabec := GridFwMsPrinter():new(0.6/*nTamBox*/,nCMIniGrid/*nCMIniGrid*/,oPrint:getLineCM()/*nCMPageAtual*/,oPrint:getCMVertical()/*nLimPage*/,.t./*lImpCabec*/,{||addPage()}/*bNewPage*/,0.40/*nRecuoSayAlign*/)
+		oColumn := ColumnFwMsPrinter():new(nLenBox,cTitulo,oFont12N,CENTRALIZADO/*nAlignHeader*/,oBlueBrush/*oBlueBrush*/)
+		oPCabec:addCell(oColumn)
+		oPCabec:print(oPrint,/*cPixel*/)
+
+		oPCabec := GridFwMsPrinter():new(nMaiorAltura/*nTamBox*/,nCMIniGrid/*nCMIniGrid*/,oPrint:getLineCM() + 0.6/*nCMPageAtual*/,oPrint:getCMVertical()/*nLimPage*/,.t./*lImpCabec*/,{||addPage()}/*bNewPage*/,0.40/*nRecuoSayAlign*/)
+		oColumn := ColumnFwMsPrinter():new(nLenBox,cTitulo,oFont12N,CENTRALIZADO/*nAlignHeader*/,/*oBlueBrush*/)
+		oPCabec:addCell(oColumn)
+		oPCabec:print(oPrint,/*cPixel*/)
+
+		oPrint:SayBitmap(0.65, nCMIniGrid + 0.05, cFile ,nImgLargura * 0.99 ,nImgAltura * 0.99,.f.)
+
+		FErase(cFile)
+
+		nCMIniGrid += nImgLargura
+	next nImagem
+
+	oPrint:setLine(oPrint:getLineCM() + nMaiorAltura + 0.9,.t.)
+return
+/*
+method getTamanhoImg(cImagem,nAltRel,nLargRel) class RelFTImp
+	Local oTImg
+	local n1CMXPixel := 37.7957517575025
+	local nAltura    := 0
+	local nLargura   := 0
+	Default cImagem  := ""
+	Default nAltRel  := 10.38
+	Default nLargRel := 18.92
+
+	//Criando o objeto com a imagem passada via parâmetro
+	oTImg := TBitmap():New(01,01,,,,cImagem,,,,,,,,,,,,,)
+
+	//Auto ajusta o tamanho, sem ele, é retornado 0
+	oTImg:lAutoSize := .T.
+
+	nAltura := oTImg:nClientHeight / n1CMXPixel
+
+	nLargura := oTImg:nClientWidth / n1CMXPixel
+	oTImg := nil
+
+	nPercAlt := nAltRel / nAltura
+	nPercLarg := nLargRel / nLargura
+
+	if nPercAlt < nPercLarg
+		nPercentual := nPercAlt
+	else
+		nPercentual := nPercLarg
+	endif
+	//se a imagem tem o tamanho ou a altura maior que a disponivel no relatorio redimensiona a imagem
+	if nPercentual < 1
+		nAltRel := nAltura * nPercentual
+		nLargRel := nLargura * nPercentual
+	endif
+	freeobj(oTImg)
+Return {nAltRel,nLargRel}
+*/
+
+method getTamanhoImg(cImagem) class RelFTImp
+	local aTamanho 		:= {0, 0}
+	local n1CMXPixel	:= 37.7957517575025
+	local jMedidas		:= nil
+	local cRootPath    	:= GetSRVProfString("ROOTPATH","")
+	//local oTImg			:= nil
+
+	default cImagem		:= "E:\totvs\protheus\homologacao\protheus12_data\relftimp20250220103804_70%.jpg"
+
+	jMedidas := u_ImageSizeNode(cRootPath + cImagem)
+
+	if jMedidas['success']
+		aTamanho[1] := jMedidas['height'] / n1CMXPixel
+		aTamanho[2] := jMedidas['width'] / n1CMXPixel
+	endif
+
+	//Criando o objeto com a imagem passada via parâmetro
+	//oTImg := TBitmap():New(01,01,,,,cImagem,,,,,,,,,,,,,)
+
+	////Auto ajusta o tamanho, sem ele, é retornado 0
+	//oTImg:lAutoSize := .T.
+
+	////Altura
+	//aTamanho[1] := oTImg:nClientHeight / n1CMXPixel
+
+	////Largura
+	//aTamanho[2] := oTImg:nClientWidth / n1CMXPixel
+	//oTImg := nil
+	//freeobj(oTImg)
+Return aTamanho
+
+method topMargin(cFicha) class RelFTImp
+	local oFont20N := TFont():New("Times New Roman", 20, 20, , .T., , , , .T., .F.)
+	local cLogo    := getNewPar("ZZ_LOGOFT","logo_ficha_tecnica.jpg")
+	default cFicha := "RIUS"
+
+	oPrint:box(1,1,4,20,,.f.)
+
+	oPrint:sayBitMap(1.3/*nPosLine1*/,1.5/*nPosLine2*/,cLogo,7.5/*nPosCol1*/,2.5/*nPosCol2*/)
+	oPrint:IPsay(1.5/*nLine*/,10/*nColumn*/,"FICHA TÉCNICA - " + cFicha,oFont20N,/*nAlign*/,/*lSumLine*/)
+	oPrint:setLine(4,.t./*lConv*/)
+return oPrint:getLineCM()
+
+method queryRel(cIDs,cNMAB) class RelFTImp
+	local cQuery  := ""
+	local cAlias  := ""
+	default cIDs  := ""
+	default cNMAB := ""
+
+	cQuery += "SELECT " + CRLF
+	cQuery += " CZB_ZZTITU," + CRLF
+	cQuery += " CZB_ZZLOCI," + CRLF
+	cQuery += " CZB_TPAB," + CRLF
+	cQuery += "	CZB_DSAB," + CRLF
+	cQuery += "	CZB_UNMD," + CRLF
+	cQuery += "	LTRIM(RTRIM(B1_COD)) + '   -   ' + B1_DESC AS TITDEFPROD," + CRLF
+	cQuery += "	B1_COD," + CRLF
+	cQuery += "	CONVERT(VARCHAR(8000),CONVERT(VARBINARY(8000),CZG_VLMEMO)) AS VLMEMO," + CRLF
+	cQuery += "	CZG.*" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + retSqlTab("CZG") + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + retSqlTab("CZD") + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + retSqlFil("CZD") + CRLF
+	cQuery += "	AND CZD_CDMD = CZG_CDMD" + CRLF
+	cQuery += "	AND " + retSqlDel("CZD") + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + retSqlTab("CZE") + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + retSqlFil("CZE") + CRLF
+	cQuery += "	AND CZE_CDMD = CZG_CDMD" + CRLF
+	cQuery += "	AND CZE_CDAB = CZG.CZG_CDAB" + CRLF
+	cQuery += "	AND " + retSqlDel("CZE") + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + retSqlTab("CZB") + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + retSqlFil("CZB") + CRLF
+	cQuery += "	AND CZB_CDAB = CZG.CZG_CDAB" + CRLF
+	if !empty(cNMAB)
+		cQuery += "	AND CZB_NMAB LIKE '%" + alltrim(cNMAB) + "%'" + CRLF
+	endif
+	cQuery += "	AND " + retSqlDel("CZB") + CRLF
+
+	cQuery += "LEFT JOIN" + CRLF
+	cQuery += "	" + retSqlTab("SB1") + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + retSqlFil("SB1") + CRLF
+	cQuery += "	AND B1_COD = CZG.CZG_CDAC" + CRLF
+	cQuery += "	AND " + retSqlDel("SB1") + CRLF
+
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + retSqlFil("CZG") + CRLF
+    /*
+    cQuery += "	AND CZG_CDAC = '30.20.01.02.05 '" + CRLF
+    cQuery += "	AND CZG_CDMD = 'TST| '" + CRLF
+    cQuery += "	AND CZG_VRFH = '00002'" + CRLF
+    */
+	if !empty(cIDs)
+		cQuery += "	AND CZG_CDAB IN " + formatIN(cIDs,",") + CRLF
+	endif
+
+	cQuery += "	AND CZG_CDAC = '" + CZG->CZG_CDAC + "'" + CRLF
+	cQuery += "	AND CZG_CDMD = '" + CZG->CZG_CDMD + "'" + CRLF
+	cQuery += "	AND CZG_VRFH = '" + CZG->CZG_VRFH + "'" + CRLF
+
+	cQuery += "	AND " + retSqlDel("CZG") + CRLF
+	cQuery += "ORDER BY" + CRLF
+	if !empty(cIDs)
+		cQuery += "	CZG_CDAB " + CRLF
+	else
+		cQuery += "	CZB_ZZLOCI," + CRLF
+		cQuery += "	CZB_ZZTITU," + CRLF
+		cQuery += "	CZG_SQAB" + CRLF
+	endif
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+return cAlias
+
+static function addPage()
+	nPageAtual++
+
+	oPrint:endPage()
+	oPrint:startPage()
+	nLinAtual := 0
+	nLinAtual += RelFTImp():topMargin()
+	nLinAtual += 0.4
+return nLinAtual
+
+static function getTamanhoImgJS(cImagem)
+	local jSize := ImageSize():run(cImagem)
+	Local aTamanho 	:= {0, 0}
+	local n1CMXPixel:= 37.7957517575025
+
+	if jSize["status"]
+		aTamanho[1] := jSize["heightPx"] / n1CMXPixel
+		aTamanho[2] := jSize["widthPx"] / n1CMXPixel
+	else
+		u_myHelp(jSize["message"])
+	endif
+
+return aTamanho

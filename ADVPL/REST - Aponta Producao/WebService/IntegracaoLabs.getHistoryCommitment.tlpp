@@ -1,0 +1,178 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+
+namespace IntegracaoLabs
+
+/*/{Protheus.doc} getHistoryCommitment
+
+Retorna lista de historico de apontamento de insumo de produção
+
+@type function
+@author Gabriel Pereira - CRM Services
+@since 12/12/2022
+@version P12
+@database ORACLE
+
+@param [oClassRestFul], object, Objeto da Classe RESTFUL recebido do fonte com a definição das API's
+@param [oRest], object, Objeto da Classe Rest do TLPP recebido do fonte com a definição das API's
+
+@return logical, lRet - Indica se foi processado com sucesso
+/*/ 
+User Function getHistoryCommitment(oClassRestFul as object, oRest as object) as character	
+	Local cJsonResponse			:= "" as character
+	Local cQueryHeader			:= "" as character
+	Local nStatusCode			:= 0 as numeric
+    Local lUseTmpTable			:= .F. as logical
+    Local lRetExecuteAPIREST	:= .T. as logical
+
+	Private oFwAdapterBaseV2	:= NIL as object
+	Private cWhere		 		:= "" as character 
+	Private cFilter		 		:= "" as character 
+	Private nPage				:= 1 as numeric 
+	Private nPageSize		 	:= 1 as numeric 
+	Private aQueryString 	 	:= {} as array 
+
+	oFwAdapterBaseV2 	:= FwAdapterBaseV2():New("GET")
+
+	getParamResquest()
+    oFwAdapterBaseV2:setPage(nPage)
+    oFwAdapterBaseV2:setPageSize(nPageSize)
+
+	createMapaCampos()
+	cQueryHeader := getQryHistory()
+
+	oFwAdapterBaseV2:SetQuery(cQueryHeader)
+	oFwAdapterBaseV2:SetWhere(cWhere)
+	oFwAdapterBaseV2:SetOrder("D3_EMISSAO")
+	If ( Len(aQueryString) > 0 )
+		oFwAdapterBaseV2:SetUrlFilter(aQueryString)
+	EndIf
+
+	lRetExecuteAPIREST := oFwAdapterBaseV2:Execute(lUseTmpTable)
+
+	If ( lRetExecuteAPIREST )
+		oFwAdapterBaseV2:FillGetResponse()
+		cJsonResponse 		:= EncodeUTF8(oFwAdapterBaseV2:GetJSONResponse())
+		nStatusCode 		:= oFwAdapterBaseV2:GetCode()
+	Else
+		cJsonResponse 		:= AllTrim(oFwAdapterBaseV2:cMessage)
+		nStatusCode 		:= oFwAdapterBaseV2:GetCode()
+	EndIf
+
+	freeObj(oFwAdapterBaseV2)
+
+	oRest:setKeyHeaderResponse("Content-Type", "Application/Json;charset=utf-8")
+	oRest:setResponse(cJsonResponse)					
+	oRest:setStatusCode(nStatusCode)
+
+Return cJsonResponse
+
+/*
+	Cria mapa de campos a ser retornado na API
+*/
+Static Function createMapaCampos() as variant
+	oFwAdapterBaseV2:AddMapFields("productCode"			, "D3_COD", .T., .T., { "D3_COD", "C", tgv.util.GetFieldLength("D3_COD"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("description"			, "B1_DESC", .T., .F., { "B1_DESC", "C", tgv.util.GetFieldLength("B1_DESC"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("unitOfMeasure"		, "B1_UM", .T., .F., { "B1_UM", "C", tgv.util.GetFieldLength("B1_UM"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("typeTM"				, "D3_TM", .T., .F., { "D3_TM", "C", tgv.util.GetFieldLength("D3_TM"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("typeMoviment"		, "D3_CF", .T., .F., { "D3_CF", "C", tgv.util.GetFieldLength("D3_CF"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("quantity"			, "D3_QUANT", .T., .F., { "D3_QUANT", "N", tgv.util.GetFieldLength("D3_QUANT"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("productionOrder"		, "D3_OP", .T., .F., { "D3_OP", "C", tgv.util.GetFieldLength("D3_OP"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("document" 			, "D3_DOC", .T., .F., { "D3_DOC", "C", tgv.util.GetFieldLength("D3_DOC"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("location" 			, "D3_LOCAL", .T., .F., { "D3_LOCAL", "C", tgv.util.GetFieldLength("D3_LOCAL"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("lot" 				, "D3_LOTECTL", .T., .F., { "D3_LOTECTL", "C", tgv.util.GetFieldLength("D3_LOTECTL"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("warehouseAddress" 	, "D3_LOCALIZ", .T., .F., { "D3_LOCALIZ", "C", tgv.util.GetFieldLength("D3_LOCALIZ"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("date"				, "D3_EMISSAO", .T., .F., { "D3_EMISSAO", "D", tgv.util.GetFieldLength("D3_EMISSAO"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("user"				, "D3_USUARIO", .T., .F., { "D3_USUARIO", "C", tgv.util.GetFieldLength("D3_USUARIO"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("shift" 				, "D3_ZZTURNO", .T., .F., { "D3_ZZTURNO", "C", tgv.util.GetFieldLength("D3_ZZTURNO"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("reversal" 			, "REVERSAL", .T., .F., { "REVERSAL", "C", 5, 0 } )
+Return
+
+/*
+	Cria query de executação da API
+*/
+Static Function getQryHistory() as character
+	Local cQuery	:= "" as character
+
+	cQuery += "	SELECT " + CRLF
+	cQuery += "		D3_COD " + CRLF
+	cQuery += "		,B1_DESC " + CRLF
+	cQuery += "		,B1_UM " + CRLF
+	cQuery += "		,D3_TM " + CRLF
+	cQuery += "		,D3_CF " + CRLF
+	cQuery += "		,D3_QUANT " + CRLF
+	cQuery += "		,D3_OP " + CRLF
+	cQuery += "		,D3_DOC " + CRLF
+	cQuery += "		,D3_LOCAL " + CRLF
+	cQuery += "		,D3_LOTECTL " + CRLF
+	cQuery += "		,D3_LOCALIZ " + CRLF
+	cQuery += "		,D3_EMISSAO " + CRLF
+	cQuery += "		,D3_USUARIO " + CRLF
+	cQuery += "		,D3_ZZTURNO " + CRLF
+	cQuery += "		,CASE " + CRLF
+	cQuery += "			WHEN D3_ESTORNO = 'S' THEN " + CRLF
+	cQuery += "				'Estorno' " + CRLF
+	cQuery += "			ELSE " + CRLF
+	cQuery += "				'Inclusão' " + CRLF
+	cQuery += "		END REVERSAL" + CRLF
+	cQuery += "	FROM " + CRLF
+	cQuery += "		" + RetSqlTab("SD3") + CRLF
+	cQuery += "		INNER JOIN " + RetSqlTab("SB1") + " ON 1 = 1 " + CRLF
+	cQuery += "			AND" + RetSqlFil("SB1") + CRLF
+	cQuery += "			AND B1_GRUPO = '4010' " + CRLF
+	cQuery += "			AND B1_COD = D3_COD " + CRLF
+	cQuery += "			AND" + RetSqlDel("SB1") + CRLF
+	cQuery += "	WHERE " + CRLF
+	cQuery += "		1 = 1 " + CRLF
+	cQuery += "		AND D3_TM IN ('101','501') " + CRLF
+	cQuery += "		AND" + RetSqlDel("SD3") + CRLF
+
+	cQuery := "SELECT #QueryFields# FROM (" + cQuery + ") SUBQRYREST WHERE 1 = 1 AND #QueryWhere#"
+Return cQuery
+
+/*
+	Rotina para recuperar parâmetros enviados
+*/
+Static Function getParamResquest()
+	Local aParams	:= {} as array
+	Local cParam	:= "" as character
+	Local cContent	:= "" as character
+	Local nParam	:= 1 as numeric
+
+	nPage := oRest:getQueryRequest()["Page"]
+
+	If ( Empty(nPage) )
+		nPage := 1
+	Endif
+	If ( ValType(nPage) == "C" )
+		nPage := Val(nPage)
+	Endif
+
+	nPageSize := oRest:getQueryRequest()["PageSize"]
+	
+	If ( Empty(nPageSize) )
+		nPageSize := 200
+	Endif
+	If ( ValType(nPageSize) == "C" )
+		nPageSize := Val(nPageSize)
+	Endif
+	
+	cWhere := oRest:getQueryRequest()["Where"]
+	If ( Empty(cWhere) )
+		cWhere := "1 = 1"
+	Endif
+	
+	aParams := oRest:getQueryRequest():GetNames()
+
+	If ( Len(aParams) > 0 )
+		For nParam:=1 To Len(aParams)
+			cParam 	:= aParams[nParam]
+			cContent:= oRest:getQueryRequest()[cParam]
+
+			If ( !Empty(cParam) .And. !( Upper(AllTrim(cParam)) $ "PAGESIZE,PAGE,WHERE" ) )
+				aAdd(aQueryString, {cParam, cContent})
+			EndIf
+		Next nParam
+	EndIf 
+Return

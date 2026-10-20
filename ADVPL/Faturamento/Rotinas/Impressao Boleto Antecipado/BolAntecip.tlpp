@@ -1,0 +1,913 @@
+#include 'totvs.ch'
+#include 'topconn.ch'
+
+user function BolAntecip();return
+
+/*/{Protheus.doc} BolAntecip
+Classe com as funcionalidades para geração de boleto antecipado
+@type class
+@version 12.1.33
+@author Tiago Faria
+@since 03/11/2021
+/*/
+	class BolAntecip
+		public data cPrefixo         as character
+		public data cTipo            as character
+		public data cCaminhoBoleto   as character
+		public data bArquivoBoleto   as codeblock
+		public data cFormaPagamento  as character
+		public data cMotBX           as character
+		public data cMotBXMan        as character
+		public data cBanco           as character
+		public data cAgencia         as character
+		public data cConta           as character
+		public data cSubConta        as character
+		public data cNaturezaRA      as character
+		public data nDiasCompensacao as numeric
+		public data lLiberaAdmin     as logical
+		public data nDias1Parcela    as numeric
+		public data nDias2Parcela    as numeric
+		public data aBoletos         as array
+
+		public method new() CONSTRUCTOR
+		public method geraTitulo()
+		public method geraBoleto()
+		public method enviaEmail()
+		public method bxTitCNAB()
+		public method geraRA()
+		public method vinculaRAxPV()
+		public method atualizaStatus()
+		public method getTotalPV()
+		public method getFormaPagamento()
+		public method getMotBx()
+		public method getMotBxMan()
+
+		static method gerar()
+		static method isPVBoletoAntecipado()
+		static method isCondPgtoBolAntecipado()
+		static method isFormaPgtoBolAntecipado()
+		static method isLibAdmin()
+		static method somaDiasUteis()
+		static method isRAAbertoCliente()
+		static method getBaseDup()
+		static method reImprimir()
+		static method vldE1Prefixo()
+	endclass
+/*/{Protheus.doc} BolAntecip::new
+Método construtor da classe
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 03/11/2021
+/*/
+method new() class BolAntecip
+	::cPrefixo        := PadR(getNewPar("ZZ_BAPREF","PV"),getSX3Cache("E1_PREFIXO","X3_TAMANHO")," ")
+	::cTipo           := PadR(getNewPar("ZZ_BATIPO","BOL"),getSX3Cache("E1_TIPO","X3_TAMANHO")," ")
+	::cCaminhoBoleto  := getNewPar("ZZ_BACBOL","\bolantecip\")
+	::bArquivoBoleto  :={||"boleto-"+SE1->(E1_NUM+"-"+E1_PARCELA)+".pdf"}
+	::cFormaPagamento := getNewPar("ZZ_BAFPGT","PGA/")
+	::cMotBX          := getNewPar("ZZ_BAMOTBX","BOL")
+	::cMotBXMan       := getNewPar("ZZ_BAMTBXM","TRF")
+	::cBanco          := padR(getNewPar("ZZ_BABANCO","001"),getSX3Cache("E1_PORTADO","X3_TAMANHO")," ")
+	::cAgencia        := padR(getNewPar("ZZ_BAAGENC","0974"),getSX3Cache("E1_AGEDEP","X3_TAMANHO")," ")
+	::cConta          := padR(getNewPar("ZZ_BACONTA","6461"),getSX3Cache("E1_CONTA","X3_TAMANHO")," ")
+	::cSubConta       := padR(getNewPar("ZZ_BASUBCO","002"),getSX3Cache("E1_ZZSUBCO","X3_TAMANHO")," ")
+	::nDias1Parcela   := getNewPar("ZZ_BADU1P",2)
+	::nDias2Parcela   := getNewPar("ZZ_BADU2P",7)
+	::aBoletos		  := {}
+	::lLiberaAdmin	  := getNewPar("ZZ_BALIBAD",.F.)
+	::cNaturezaRA     := getNewPar("ZZ_BANATRA","10401")
+return
+/*/{Protheus.doc} BolAntecip::gerar
+Geração de boleto automático
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 03/11/2021
+@return logical, Se true boleto gerado com sucesso
+/*/
+method gerar() class BolAntecip
+	local oBolAnt       := BolAntecip()   :New()
+	local oBolDel       := BolAntecipDel():New()
+	local lRet          := .t.
+	local cProblema     := ""
+	local cSolucao      := ""
+	local aTitulos      := {}
+	local nTitulo       := 0
+	local cParcela      := PadL("0",getSX3Cache("E1_PARCELA","X3_TAMANHO"),"0")
+	local nAdiantamento := getThreadValue("TOTAL_RA_PV")
+	local nSldAdt		:= 0
+	local nField        := 0
+	local cCampoVencimento := ""
+	local cCampoParcela := ""
+	local lDisarmTransaction := .t.
+	if valType(nAdiantamento) <> "N"
+		nAdiantamento := 0
+	endif
+
+	setThreadValue("TOTAL_RA_PV",0)
+
+	BEGIN TRANSACTION
+		BEGIN SEQUENCE
+
+			if oBolDel:isBoletoGerado()
+				lDisarmTransaction := .f.
+				break
+			elseif oBolAnt:isPVBoletoAntecipado(SC5->C5_FORPGT/*cFormaPagamento*/,SC5->C5_CONDPAG/*cCondPagamento*/,.F./*lHelp*/)
+				if!msgYesNo("Deseja realizar a geração e envio do boleto para o pedido? <b>Após gerado o boleto o Pedido de Vendas não poderá sofrer alterações!</b>")
+					lDisarmTransaction := .f.
+					break
+				endif
+			else
+				lDisarmTransaction := .f.
+				break
+			endif
+
+			while .t.
+				nField++
+				cCampoVencimento := "C5_ZZVEN" + cValToChar(nField)
+				cCampoParcela    := "C5_ZZPAR" + cValToChar(nField)
+
+				if SC5->(fieldPos(cCampoVencimento)) > 0
+					nParcela := &("SC5->"+cCampoParcela)
+					dVencimento := &("SC5->"+cCampoVencimento)
+					if nParcela > 0
+						aAdd(aTitulos,{nParcela,dVencimento})
+					endif
+				else
+					exit
+				endif
+			enddo
+
+			if len(aTitulos) == 0
+				aAdd(aTitulos,{SC5->C5_ZZBASED,BolAntecip():somaDiasUteis(date(),oBolAnt:nDias1Parcela)})
+			endif
+
+			for nTitulo := 1 to len(aTitulos)
+				nValor  := aTitulos[nTitulo,1]
+				dDtVenc := aTitulos[nTitulo,2]
+
+				if nAdiantamento > nValor
+					nAdiantamento -= nValor
+					loop
+				else
+					nSldAdt := nAdiantamento
+					nAdiantamento -= nValor
+					nValor := nValor - nSldAdt
+				endif
+
+				if nValor <= 0
+					loop
+				endif
+
+				if nAdiantamento < 0
+					nAdiantamento := 0
+				endif
+
+				cParcela := soma1(cParcela)
+				if !oBolAnt:geraTitulo(nValor,dDtVenc,cParcela)
+					cProblema := "Erro ao gerar título para pagamento antecipado"
+					lDisarmTransaction := .f.
+					break
+				endif
+
+				if !oBolAnt:geraBoleto()
+					cProblema := "Erro ao gerar o boleto"
+					break
+				endif
+			next nTitulo
+
+			if len(oBolAnt:aBoletos) > 0 .and. !oBolAnt:enviaEmail(oBolAnt:aBoletos)
+				cProblema := "Erro ao enviar e-mail do boleto para o cliente"
+				lDisarmTransaction := .f.
+				break
+			endif
+
+			RECOVER
+			lRet := .f.
+			if lDisarmTransaction
+				disarmTransaction()
+			endif
+			if !empty(cProblema)
+				u_myHelp(cProblema,cSolucao)
+			endif
+
+		END SEQUENCE
+	END TRANSACTION
+	oBolAnt:atualizaStatus(SC5->C5_NUM)
+
+return lRet
+/*/{Protheus.doc} BolAntecip::geraTitulo
+Realiza a inclusão do título
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+@param nValor, numeric, Valor do Titulo
+@param dVencto, date, Data de Vencimento
+@return logical, Se true o titulo foi incluido com sucesso se false houve erro na inclusão
+/*/
+method geraTitulo(nValor,dVencto,cParcela) class BolAntecip
+	local aCab          := {}
+	local cNumTit       := padL(SC5->C5_NUM,getSX3Cache("E1_NUM","X3_TAMANHO"),"0")
+	private lMsErroAuto := .f.
+	default nValor      := 0
+	default dVencto     := dDataBase
+	default cParcela    := "01"
+
+	cParcela := PadL(cParcela,getSX3Cache("E1_PARCELA","X3_TAMANHO"),"0")
+
+	aadd(aCab, {"E1_NUM"    , cNumTit        , Nil})
+	aadd(aCab, {"E1_PREFIXO", ::cPrefixo     , Nil})
+	aadd(aCab, {"E1_TIPO"   , ::cTipo        , Nil})
+	aadd(aCab, {"E1_PARCELA", cParcela       , Nil})
+	aadd(aCab, {"E1_FORPGT" , SC5->C5_FORPGT , Nil})
+	aadd(aCab, {"E1_NATUREZ", SC5->C5_NATUREZ, Nil})
+	aadd(aCab, {"E1_CLIENTE", SC5->C5_CLIENTE, Nil})
+	aadd(aCab, {"E1_LOJA"   , SC5->C5_LOJACLI, Nil})
+	aadd(aCab, {"E1_EMISSAO", dDataBase      , Nil})
+	aadd(aCab, {"E1_VENCTO" , dVencto        , Nil})
+	aadd(aCab, {"E1_VALOR"  , nValor         , Nil})
+	//aadd(aCab, {"E1_HIST"   , HISTORICO, Nil})
+
+	cChave := xFilial("SE1")
+	cChave += ::cPrefixo
+	cChave += cNumTit
+	cChave += cParcela
+	cChave += ::cTipo
+
+	if Posicione("SE1",1,cChave,"Eof()")
+		aCab := FwVetByDic(aCab,"SE1")
+		MSExecAuto({|x,y| FINA040(x,y)}, aCab, 3)
+
+		if lMsErroAuto
+			mostraErro()
+		endif
+	endif
+return !lMsErroAuto
+/*/{Protheus.doc} BolAntecip::geraBoleto
+Realiza a geração do Boleto Flex
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+/*/
+method geraBoleto() class BolAntecip
+	local aCabec        := {}
+	local cArquivoBoleto:= eval(::bArquivoBoleto)
+	private lMsErroAuto := .f.
+
+	aADD(aCabec, {"E1_PREFIXO"	, SE1->E1_PREFIXO	})
+	aADD(aCabec, {"E1_NUM"		, SE1->E1_NUM		})
+	aADD(aCabec, {"E1_PARCELA"	, SE1->E1_PARCELA	})
+	aADD(aCabec, {"E1_TIPO"		, SE1->E1_TIPO		})
+	if !empty(SE1->E1_PORTADO)
+		aADD(aCabec, {"EE_CODIGO"	, SE1->E1_PORTADO	})
+		aADD(aCabec, {"EE_AGENCIA"	, SE1->E1_AGEDEP	})
+		aADD(aCabec, {"EE_CONTA"	, SE1->E1_CONTA	    })
+		aADD(aCabec, {"EE_SUBCTA"	, SE1->E1_ZZSUBCO	})
+	else
+		aadd(aCabec, {"EE_CODIGO" , ::cBanco})
+		aadd(aCabec, {"EE_AGENCIA", ::cAgencia})
+		aadd(aCabec, {"EE_CONTA"  , ::cConta})
+		aadd(aCabec, {"EE_SUBCTA" , ::cSubConta})
+	endif
+	makeDir(::cCaminhoBoleto)
+	U_AutoBolFlex(aCabec, ::cCaminhoBoleto + cArquivoBoleto)
+
+	if !lMsErroAuto
+		lMsErroAuto := !file(::cCaminhoBoleto + cArquivoBoleto)
+	endIf
+
+	if !lMsErroAuto
+		aAdd(::aBoletos,::cCaminhoBoleto + cArquivoBoleto)
+		::atualizaStatus(getNumPV(SE1->E1_NUM))
+	endif
+return !lMsErroAuto
+/*/{Protheus.doc} BolAntecip::enviaEmail
+Realiza o envio do boleto por e-mail para o cliente
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+@return logical, se true o boleto foi enviado com sucesso se false não foi
+/*/
+method enviaEmail(xBoleto) class BolAntecip
+	local oBolProtheus := BoletosProtheus():New()
+	local cEmail       := oBolProtheus:getEmail(SE1->E1_PREFIXO, SE1->E1_NUM, SE1->E1_PARCELA, SE1->E1_TIPO)
+	local cAssunto     := alltrim(FwFilialName()) + " - Boletos Bancários Pedido " + SC5->C5_NUM
+	local cCorpoEmail  := ""
+	local lRet         := .t.
+	default xBoleto    := ::cCaminhoBoleto + eval(::bArquivoBoleto)
+
+	cCorpoEmail += "Prezado Cliente,"
+	cCorpoEmail += "<br>"
+	cCorpoEmail += "Seguem em anexo boletos bancários."
+	cCorpoEmail += "<br>"
+	cCorpoEmail += "Qualquer dúvida estamos à disposição."
+	cCorpoEmail += "<br><br>"
+	cCorpoEmail += "Atenciosamente,"
+	cCorpoEmail += "<br>"
+	cCorpoEmail += "<b>" + alltrim(FwFilialName()) + "</b>"
+	cCorpoEmail += "<br>"
+	cCorpoEmail += "Mensagem automática. Favor não responder."
+
+	lRet := u_sendMail(cAssunto,cCorpoEmail,cEmail,xBoleto)
+
+	if valType(xBoleto) == "C"
+		xBoleto := {xBoleto}
+	endif
+
+	aEval(xBoleto,{|cBoleto| fErase(cBoleto)})
+return lRet
+/*
+Retorna o total do pedido calculado pelas funcoes mafis
+*/
+method getTotalPV(cNum) class BolAntecip
+	local aArea     := Lj7GetArea({"SC5", "SC6"})
+	local cAlias    := ''
+	local cQuery    := ''
+	local oImpostos := ImpostosPV():New()
+	local nTotPV    := 0
+	default cNum    := SC5->C5_NUM
+	cQuery += "SELECT" + CRLF
+	cQuery += "	*" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SC5') + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SC6') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SC6') + CRLF
+	cQuery += "	AND C6_NUM = C5_NUM" + CRLF
+	cQuery += "	AND " + RetSqlDel('SC6') + CRLF
+
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SC5') + CRLF
+	cQuery += "	AND C5_NUM = '" + cNum + "'" + CRLF
+	cQuery += "	AND " + RetSqlDel('SC5') + CRLF
+	cQuery += "ORDER BY C6_FILIAL,C6_NUM,C6_ITEM" + CRLF
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+
+	oImpostos:run(cAlias/*cAliasCabec*/,cAlias/*cAliasItem*/)
+
+	nTotPV := oImpostos:getImposto(,"NF_BASEDUP")
+	oImpostos:destroy()
+	Lj7RestArea(aArea)
+return nTotPV
+/*/{Protheus.doc} BolAntecip::bxTitCNAB
+Baixa o título do CNAB
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 05/11/2021
+@return logical, Se true titulo foi baixado com sucesso se false houve erro
+/*/
+method bxTitCNAB(aValores) class BolAntecip
+	local aTit          := {}
+	local aArea         := Lj7GetArea({"SE1", "SE5"})
+	local cNumTit       := aValores[1]
+	local dBaixa        := aValores[2]
+	//local cTipo     := aValores[3]
+	//local cNsNum    := aValores[4]
+	local nDespes       := aValores[5]
+	local nDescont      := aValores[6]
+	local nAbatim       := aValores[7]
+	local nValRec       := aValores[8]
+	local nJuros        := aValores[9]
+	local nMulta        := aValores[10]
+	local nOutrDesp     := aValores[11]
+	local nValCc        := aValores[12]
+	local dDataCred     := aValores[13]
+	//local cOcorr    := aValores[14]
+	local cMotBan       := aValores[15]
+	local xBuffer       := aValores[16]
+	local dDtVc         := aValores[17]
+	local lContinuaCNAB := .t.
+	local aBKPMV		:= u_saveMV()
+	local oBol          := BolAntecipDel():new()
+	private lMsErroAuto := .f.
+	default aValores    := {}
+
+	Posicione("SEB",1,xFilial("SEB")+MV_PAR06+cOcorr+"R","!Eof()")
+	Posicione("SE1",16,xFilial("SE1")+substr(cNumTit,1,10),"!Eof()")
+
+	if SE1->(!Eof()) .and.;
+			SEB->(!EOf()) .and.;
+			nValRec > 0 .and.;
+			SEB->EB_OCORR $ "06|07|08|36|37|38|39" .and.;
+			!oBol:canAccess(.f./*lHelp*/)
+
+		lContinuaCNAB := .f.
+		aadd(aTit, {"E1_PREFIXO"  , SE1->E1_PREFIXO, Nil}) // 01
+		aadd(aTit, {"E1_NUM"      , SE1->E1_NUM    , Nil}) // 02
+		aadd(aTit, {"E1_PARCELA"  , SE1->E1_PARCELA, Nil}) // 03
+		aadd(aTit, {"E1_TIPO"     , SE1->E1_TIPO   , Nil}) // 04
+		aadd(aTit, {"AUTMOTBX"    , ::cMotBX       , Nil}) // 05
+		aadd(aTit, {"AUTDTBAIXA"  , dBaixa         , Nil}) // 06
+		aadd(aTit, {"AUTDTCREDITO", dDataCred      , Nil}) // 07
+		aadd(aTit, {"AUTHIST"     , cTipoBx        , Nil}) // 08
+		aadd(aTit, {"AUTVALREC"   , nValRec        , Nil}) // 09
+		aadd(aTit, {"AUTJUROS"    , nJuros         , Nil}) // 10
+		aadd(aTit, {"AUTDESCONT"  , nDescont       , Nil}) // 11
+		aadd(aTit, {"AUTMULTA"    , nMulta         , Nil}) // 12
+		//aadd(aTit, {"AUTACRESC"   , nAcresc        , Nil}) // 13
+		//aadd(aTit, {"AUTDECRESC"  , nDecresc       , Nil}) // 14
+		aadd(aTit, {"AUTBANCO"    , SE1->E1_PORTADO, Nil}) //15
+		aadd(aTit, {"AUTAGENCIA"  , SE1->E1_AGEDEP , Nil}) //16
+		aadd(aTit, {"AUTCONTA"    , SE1->E1_CONTA  , Nil}) //17
+
+		MSExecAuto({|x,y| FINA070(x,y)},aTit,3)
+
+		If  lMsErroAuto
+			MOSTRAERRO()
+		else
+			lMsErroAuto := !::geraRA(nValRec,dBaixa)
+		endif
+	endif
+
+	Lj7RestArea(aArea)
+	u_restoreMV(aBKPMV)
+return {!lMsErroAuto,lContinuaCNAB}
+/*/{Protheus.doc} BolAntecip::geraRA
+Gera o RA na baixa do título
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+@return logical, Se true RA foi gerado com sucesso se false houve erro na geração
+/*/
+method geraRA(nValRec,dBaixa,cCodMotBx) class BolAntecip
+	local aCab          := {}
+	local cChave        := ""
+	local aArea         := Lj7GetArea({"SE1"})
+	local dDtBkp		:= dDataBase
+	local cParcela      := SE1->E1_PARCELA
+	private lMsErroAuto := .f.
+	default cCodMotBx := ""
+	dDataBase := dBaixa
+
+	cChave := xFilial("SE1")
+	cChave += SE1->E1_PREFIXO
+	cChave += SE1->E1_NUM
+	cChave += cParcela
+	cChave += "RA"
+
+	while Posicione("SE1",1,cChave,"!Eof()")
+		cParcela := soma1(cParcela)
+		cChave := xFilial("SE1")
+		cChave += SE1->E1_PREFIXO
+		cChave += SE1->E1_NUM
+		cChave += cParcela
+		cChave += "RA"
+	enddo
+
+	Lj7RestArea(aArea)
+
+	aadd(aCab, {"E1_NUM"    , SE1->E1_NUM                            , Nil})
+	aadd(aCab, {"E1_PREFIXO", SE1->E1_PREFIXO                        , Nil})
+	aadd(aCab, {"E1_FORPGT" , SE1->E1_FORPGT                         , Nil})
+	aadd(aCab, {"E1_TIPO"   , "RA"                                   , Nil})
+	aadd(aCab, {"E1_PARCELA", SE1->E1_PARCELA                        , Nil})
+	aadd(aCab, {"E1_NATUREZ", ::cNaturezaRA                          , Nil})
+	aadd(aCab, {"E1_CLIENTE", SE1->E1_CLIENTE                        , Nil})
+	aadd(aCab, {"E1_LOJA"   , SE1->E1_LOJA                           , Nil})
+	if cCodMotBx == ::getMotBxMan()
+		aadd(aCab, {"E1_EMISSAO", dDataBase, Nil})
+		aadd(aCab, {"E1_VENCTO" , dDataBase, Nil})
+	else
+		aadd(aCab, {"E1_EMISSAO", BolAntecip():somaDiasUteis(dDataBase,1), Nil})
+		aadd(aCab, {"E1_VENCTO" , BolAntecip():somaDiasUteis(dDataBase,1), Nil})
+	endif
+	aadd(aCab, {"E1_VALOR"  , nValRec                                , Nil})
+	aadd(aCab, {"E1_PORTADO", SE1->E1_PORTADO                        , Nil})
+	aadd(aCab, {"E1_AGEDEP" , SE1->E1_AGEDEP                         , Nil})
+	aadd(aCab, {"E1_CONTA"  , SE1->E1_CONTA                          , Nil})
+	aadd(aCab, {"E1_HIST"   , "BOLETO ANTECIPADO"                    , Nil})
+
+	aCab := FwVetByDic(aCab,"SE1")
+	BEGIN TRANSACTION
+		MSExecAuto({|x,y| FINA040(x,y)}, aCab, 3)
+
+		if lMsErroAuto
+			mostraErro()
+		else
+			if !::vinculaRAxPV()
+				lMsErroAuto := .t.
+			else
+				::atualizaStatus(getNumPV(SE1->E1_NUM))
+			endif
+		endif
+
+		if lMsErroAuto
+			disarmTransaction()
+		endif
+
+	END TRANSACTION
+
+	dDataBase := dDtBkp
+
+	Lj7RestArea(aArea)
+return !lMsErroAuto
+/*/{Protheus.doc} BolAntecip::vinculaRAxPV
+Inclui a tabela FIE para vincular o RA com o Pedido de Vendas
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+@return logical, Se true o vinculo foi realizado com sucesso se false houve erro
+/*/
+method vinculaRAxPV() class BolAntecip
+	local lRet := .t.
+	local aArea := Lj7GetArea({"SE1","SC5"})
+
+	lRet := posicione("SC5",1,xFilial("SC5")+getNumPV(SE1->E1_NUM),"!Eof()")
+
+	if lRet
+		recLock("FIE",.t.)
+		FIE->FIE_FILIAL := xFilial("FIE")
+		FIE->FIE_CART   := "R"
+		FIE->FIE_PEDIDO := SC5->C5_NUM
+		FIE->FIE_PREFIX := ::cPrefixo
+		FIE->FIE_NUM    := SE1->E1_NUM
+		FIE->FIE_PARCEL := SE1->E1_PARCELA
+		FIE->FIE_TIPO   := SE1->E1_TIPO
+		FIE->FIE_CLIENT := SE1->E1_CLIENTE
+		FIE->FIE_FORNEC := ""
+		FIE->FIE_LOJA   := SE1->E1_LOJA
+		FIE->FIE_VALOR  := SE1->E1_VALOR
+		FIE->FIE_SALDO  := SE1->E1_VALOR
+		FIE->FIE_FILORI := xFilial("FIE")
+		FIE->(msUnlock())
+	else
+		u_myHelp("Não foi encontrado o pedido de vendas para vincular o RA")
+	endif
+
+	Lj7RestArea(aArea)
+return lRet
+/*/{Protheus.doc} BolAntecip::atualizaStatus
+Atualiza o campo de legenda do status do boleto antecipado
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 18/11/2021
+@param cNumPV, character, Numero do pedido de vendas a ser atualizado, caso não passe a funcao atualiza todos os pedidos que houve modificacao do status
+/*/
+method atualizaStatus(cNumPV) class BolAntecip
+	local cAlias                 := ''
+	local cQuery                 := ''
+	local cPVNormal              := "1"
+	local cPgtoAntNEnviadoBoleto := "2"
+	local cPgtoAntEnviadoBoleto  := "3"
+	local cPgtoAntEmAberto       := "4"
+	local cPgtoAntBaixado        := "5"
+	local aArea					 := Lj7GetArea({"SC5"})
+	default cNumPV               := ""
+
+	cQuery += "SELECT * FROM (" + CRLF
+	cQuery += "SELECT" + CRLF
+	cQuery += "	CASE " + CRLF
+	cQuery += "		WHEN E1_NUM IS NULL THEN '"  + cPgtoAntNEnviadoBoleto + "'" + CRLF
+	cQuery += "		WHEN E1_NUM IS NOT NULL AND E1_SALDO = 0 THEN '" + cPgtoAntBaixado + "'" + CRLF
+	cQuery += "		WHEN E1_NUM IS NOT NULL AND E1_SALDO > 0 AND QTD_IDCNAB = 0 THEN '" + cPgtoAntEnviadoBoleto + "'" + CRLF
+	cQuery += "		WHEN E1_NUM IS NOT NULL AND E1_SALDO > 0 AND QTD_IDCNAB > 0 THEN '" + cPgtoAntEmAberto + "'" + CRLF
+	cQuery += "	END AS STATUS," + CRLF
+	cQuery += "	C5_ZZLEGBA," + CRLF
+	cQuery += "	SC5.R_E_C_N_O_  AS C5RECNO" + CRLF
+
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SC5') + CRLF
+
+	cQuery += "OUTER APPLY(" + CRLF
+
+	cQuery += "SELECT " + CRLF
+	cQuery += "	E1_NUM," + CRLF
+	cQuery += "	SUM(E1_SALDO) AS E1_SALDO," + CRLF
+	cQuery += "	SUM(E1_VALOR) AS E1_VALOR," + CRLF
+	cQuery += "	SUM(CASE WHEN E1_IDCNAB = '' THEN 0 ELSE 1 END) AS QTD_IDCNAB	" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SE1') + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SE1') + CRLF
+	cQuery += "	AND E1_NUM = REPLICATE('0',3) + C5_NUM" + CRLF
+	cQuery += "	AND E1_TIPO IN ('" + ::cTipo + "')" + CRLF
+	cQuery += "	AND E1_PREFIXO = '" + ::cPrefixo + "'" + CRLF
+	cQuery += "	AND " + RetSqlDel('SE1') + CRLF
+	cQuery += "GROUP BY" + CRLF
+	cQuery += "	E1_FILIAL," + CRLF
+	cQuery += "	E1_NUM," + CRLF
+	cQuery += "	E1_TIPO," + CRLF
+	cQuery += "	E1_PREFIXO" + CRLF
+	cQuery += ") SE1" + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SC5') + CRLF
+	cQuery += "	AND C5_FORPGT IN " + formatIn(::cFormaPagamento,"/") + CRLF
+	cQuery += "	AND C5_FORPGT <> ''" + CRLF
+	if !empty(cNumPV)
+		cQuery += "	AND C5_NUM = '" + cNumPV +  "'" + CRLF
+	endif
+	cQuery += "	AND " + RetSqlDel('SC5') + CRLF
+	cQuery += ")X " + CRLF
+
+	if empty(cNumPV)
+		cQuery += "WHERE C5_ZZLEGBA <> STATUS" + CRLF
+	endif
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+
+	if (cAlias)->(Eof()) .and. !empty(cNumPV)
+		recLock("SC5",.f.)
+		SC5->C5_ZZLEGBA := cPVNormal
+		SC5->(msUnlock())
+	endif
+
+	while (cAlias)->(!Eof())
+		SC5->(dbGoTo((cAlias)->(C5RECNO)))
+
+		recLock("SC5",.f.)
+		SC5->C5_ZZLEGBA := (cAlias)->(STATUS)
+		SC5->(msUnlock())
+
+		(cAlias)->(dbSkip())
+	enddo
+
+	(cAlias)->(dbCloseArea())
+	Lj7RestArea(aArea)
+return
+/*/{Protheus.doc} BolAntecip::getFormaPagamento
+Retorna as formas de pagamento que são referente ao boleto antecipado
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 18/11/2021
+@return character, Retorna as formas de pagamento que são referente ao boleto antecipado
+/*/
+method getFormaPagamento() class BolAntecip
+return ::cFormaPagamento
+/*/{Protheus.doc} BolAntecip::getMotBx
+Retorna o motivo de baixa referente ao boleto antecipado
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 18/11/2021
+@return character, Retorna o motivo de baixa referente ao boleto antecipado
+/*/
+method getMotBx() class BolAntecip
+return ::cMotBX
+/*/{Protheus.doc} BolAntecip::getMotBxMan
+Retorna o motivo de baixa referente ao boleto antecipado manual
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 18/11/2021
+@return character, Retorna o motivo de baixa referente ao boleto antecipado
+/*/
+method getMotBxMan() class BolAntecip
+return ::cMotBXMan
+/*/{Protheus.doc} BolAntecip::isPVBoletoAntecipado
+Avalia se a forma de pagamento e condição de pagamento são referente ao boleto antecipado
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 18/11/2021
+@param cFormaPagamento, character, Código da formpa de pagamento
+@param cCondPagamento, character, Código da condicao de pagamento
+@param lHelp, logical, Indica se deve exibir o HELP caso o retorno seja .f.
+@return logical, Se true o PV controla boleto antecipado se false não controla
+/*/
+method isPVBoletoAntecipado(cFormaPagamento,cCondPagamento,lHelp) class BolAntecip
+return (BolAntecip():isFormaPgtoBolAntecipado(cFormaPagamento) .and. BolAntecip():isCondPgtoBolAntecipado(cCondPagamento,lHelp))
+/*/{Protheus.doc} BolAntecip::isFormaPgtoBolAntecipado
+Avalia se a forma de pagamento é boleto antecipado
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 18/11/2021
+@param cFormaPagamento, character, Código da forma de pagamento
+@return logical, Se true a forma de pagamento é de boleto antecipado se false não é
+/*/
+method isFormaPgtoBolAntecipado(cFormaPagamento) class BolAntecip
+	local oBol              := BolAntecip():New()
+	default cFormaPagamento := SC5->C5_FORPGT
+return cFormaPagamento +"/" $ oBol:getFormaPagamento()
+/*/{Protheus.doc} BolAntecip::isCondPgtoBolAntecipado
+Avalia se a condição de pagamento esta parametrizada para a rotina de boleto antecipado
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 18/11/2021
+@param cCondPagamento, character, Código da condicao de pagamento
+@param lHelp, logical, Indica se o retorno for false deve exibir help de ajuda
+@return logical, Se true a condicao de pagamento esta OK se false não esta
+/*/
+method isCondPgtoBolAntecipado(cCondPagamento,lHelp) class BolAntecip
+	local cProblema        := ""
+	local cSolucao         := ""
+	local lRet             := .t.
+	default cCondPagamento := SC5->C5_CONDPAG
+	default lHelp          := .f.
+
+	BEGIN SEQUENCE
+		if posicione("SE4",1,xFilial("SE4")+cCondPagamento,"!Eof()") .and. SE4->E4_CTRADT <> "1"
+			cProblema := "Para pedidos de vendas com forma de pagamento que gera boleto antecipado obrigatoriamente a condição de pagamento deve permitir adiantamento!"
+			cSolucao := "Troque a condição de pagamento para continuar ou altere a condição de pagamento atual para permitir adiantamento!"
+			break
+		endif
+
+		if isCPgtoMaisDeUmaParcela(cCondPagamento)
+			cProblema := "Para pedidos de vendas com forma de pagamento que gera boleto antecipado obrigatoriamente a condição de pagamento deve gerar apenas 1 parcela para pagamento!"
+			cSolucao := "Troque a condição de pagamento para uma que gere apenas 1 parcela"
+			break
+		endif
+
+		RECOVER
+		if lHelp
+			u_myHelp(cProblema,cSolucao,"BOLETO ANTECIPADO")
+		endif
+		lRet := .f.
+
+	END SEQUENCE
+return lRet
+
+method isLibAdmin() class BolAntecip
+	local oBol := BolAntecip():new()
+return oBol:lLiberaAdmin .and. FwIsAdmin()
+
+static function getNumPV(cNumTit)
+	default cNumTit := SE1->E1_NUM
+return substr(cNumTit,4,getSX3Cache("C5_NUM","X3_TAMANHO"))
+
+static function isCPgtoMaisDeUmaParcela(cCondPagamento)
+return len(condicao(10000,cCondPagamento)) > 1 .and. SE4->E4_TIPO <> "9"
+
+method somaDiasUteis(dData,nDias) class BolAntecip
+	local nDia := 0
+	local nDiaSoma := 1
+
+	if nDias < 0
+		nDiaSoma := nDiaSoma * -1
+		nDias := nDias * -1
+	endif
+
+	while nDia < nDias
+		dData := dData + nDiaSoma
+		if dData <> dataValida(dData)
+			loop
+		endif
+
+		nDia++
+	enddo
+return dData
+/*/{Protheus.doc} BolAntecip::isRAAbertoCliente
+Retorna se ha RA em abeto para o cliente e loja
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 22/11/2021
+@return logical, Se true há RA em aberto se false não há
+/*/
+method isRAAbertoCliente(cCliente,cLoja) class BolAntecip
+	local cAlias := ''
+	local cQuery := ''
+
+	cQuery += "SELECT * FROM (" + CRLF
+	cQuery += "SELECT" + CRLF
+	cQuery += "	E1_SALDO - COALESCE(FIE_VALOR,0) AS SALDO" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SE1') + CRLF
+
+	cQuery += "OUTER APPLY" + CRLF
+	cQuery += "(" + CRLF
+	cQuery += "SELECT " + CRLF
+	cQuery += "	FIE_NUM, " + CRLF
+	cQuery += "	FIE_PARCEL, " + CRLF
+	cQuery += "	FIE_TIPO, " + CRLF
+	cQuery += "	FIE_PREFIX, " + CRLF
+	cQuery += "	FIE_CLIENT, " + CRLF
+	cQuery += "	FIE_LOJA, " + CRLF
+	cQuery += "	SUM(FIE_VALOR) AS FIE_VALOR " + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('FIE') + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('FIE') + CRLF
+	cQuery += "	AND FIE_CART = 'R'" + CRLF
+	cQuery += "	AND FIE_CLIENT = E1_CLIENTE" + CRLF
+	cQuery += "	AND FIE_LOJA = E1_LOJA" + CRLF
+	cQuery += "	AND FIE_PREFIX = E1_PREFIXO" + CRLF
+	cQuery += "	AND FIE_NUM = E1_NUM" + CRLF
+	cQuery += "	AND FIE_PARCEL = E1_PARCELA" + CRLF
+	cQuery += "	AND FIE_TIPO = 'RA'" + CRLF
+	cQuery += "	AND " + RetSqlDel('FIE') + CRLF
+	cQuery += "GROUP BY " + CRLF
+	cQuery += "	FIE_NUM, " + CRLF
+	cQuery += "	FIE_PARCEL, " + CRLF
+	cQuery += "	FIE_TIPO, " + CRLF
+	cQuery += "	FIE_PREFIX, " + CRLF
+	cQuery += "	FIE_CLIENT, " + CRLF
+	cQuery += "	FIE_LOJA" + CRLF
+	cQuery += ")FIE" + CRLF
+
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SE1') + CRLF
+	cQuery += "	AND E1_CLIENTE = '" + cCliente + "'" + CRLF
+	cQuery += "	AND E1_LOJA = '" + cLoja + "'" + CRLF
+	cQuery += "	AND E1_TIPO = 'RA'" + CRLF
+	cQuery += "	AND E1_SALDO > 0" + CRLF
+	cQuery += "	AND " + RetSqlDel('SE1') + CRLF
+	cQuery += ")X" + CRLF
+	cQuery += "WHERE SALDO > 0" + CRLF
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+
+	lRet := (cAlias)->(!eof())
+
+	(cAlias)->(dbCloseArea())
+return lRet
+/*/{Protheus.doc} BolAntecip::getBaseDup
+Retorna a base da duplicata de um pedido que está sendo incluindo/alterado
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 24/11/2021
+@return numeric, Retorna a base de duplicata do pedido
+/*/
+method getBaseDup() class BolAntecip
+	MA410IMPOS(if(INCLUI,3,4)/*nOpc*/, .t./*lRetTotal*/, /*aRefRentab*/ )
+
+	nBaseDup := getThreadValue("ZZNF_BASEDUP")
+return nBaseDup
+
+method reImprimir(cNumPV) class BolAntecip
+	local aArea  := Lj7GetArea({"SE1"})
+	local oBol   := BolAntecip():New()
+	local cAlias := ''
+	local cQuery := ''
+	local cPath := ""
+	default cNumPV := SC5->C5_NUM
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "	SE1.R_E_C_N_O_ AS E1RECNO" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SE1') + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SE1') + CRLF
+	cQuery += "	AND E1_NUM = '" + getNumTitulo(cNumPV) + "'" + CRLF
+	cQuery += "	AND E1_TIPO IN ('" + oBol:cTipo + "')" + CRLF
+	cQuery += "	AND E1_PREFIXO = '" + oBol:cPrefixo + "'" + CRLF
+	cQuery += "	AND E1_PORTADO+E1_CONTA <> ''" + CRLF
+	cQuery += "	AND " + RetSqlDel('SE1') + CRLF
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+	if (cAlias)->(!Eof())
+		if ask(@cPath)
+			oBol:cCaminhoBoleto := cPath
+
+			while (cAlias)->(!Eof())
+				SE1->(dbGoTo((cAlias)->(E1RECNO)))
+
+				oBol:geraBoleto()
+
+				(cAlias)->(dbSkip())
+			enddo
+
+			Lj7RestArea(aArea)
+		endif
+	else
+		msgAlert("Não há dados para impressão do boleto!")
+	endif
+	(cAlias)->(dbCloseArea())
+return
+
+static function ask(cPath)
+	local lRet          := .f.
+	local oParam        := nil
+	local oParamBox     := IpParamBoxObject():newIpParamBoxObject("BOLANTECIP")
+
+	oParamBox:setTitle("Re-impressão boleto antecipado")
+	//oParamBox:setUserSave(.f.)
+	//oParamBox:setCanSave(.f.)
+
+	oParam := IpParamObject():newIpParamObject("PATH", "file", "Caminho", "C", 60,254)
+	oParam:setFileParams(GETF_RETDIRECTORY+GETF_LOCALHARD)
+	oParam:setRequired(.T.)
+	oParamBox:addParam(oParam)
+
+	if oParamBox:show()
+		lRet             := .t.
+		cPath := alltrim(oParamBox:getValue("PATH"))
+	endif
+return lRet
+
+static function getNumTitulo(cNumPV)
+return PadL(cNumPV,getSX3Cache("E1_NUM","X3_TAMANHO"),"0")
+
+method vldE1Prefixo(cPrefixo) class BolAntecip
+	local oBol := BolAntecip():new()
+	local lRet := .t.
+	default cPrefixo := M->E1_PREFIXO
+
+	if alltrim(cPrefixo) == alltrim(oBol:cPrefixo) .and. type("lF040Auto")=="L" .and. !lF040Auto
+		u_myHelp("Prefixo reservado para uso na rotina de BOLETO ANTECIPADO")
+		lRet := .f.
+	endif
+return lRet

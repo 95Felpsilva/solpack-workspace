@@ -1,0 +1,960 @@
+#include 'totvs.ch'
+#include 'topconn.ch'
+#include 'FWMVCDEF.ch'
+
+static PROGRAMADO 			:= "Programado"
+static IMEDIATO 			:= "Imediato"
+static ATRASADOS 			:= "Atrasados"
+static PREVISTO_MES_QUE_VEM := "Prog. mês que vem"
+static PREVISTO				:= "Previsto"
+static PREFIXO_PROD			:= "_PROD"
+static nRecnoC9		:= 0
+user function SeqLibPed(lPFilProd, nPercReducao,aDados)
+	local oGrid          := nil
+	local aEnableButtons := {}
+	local lConfirmou     := .f.
+	private cIDModel     := "PE_SEQLIBPED"
+	private cIDGrid      := "MODEL_GRID"
+	private cIDView      := "VIEW_GRID"
+	private cIDProgram   := "GRIDMVC"
+	private nSaldoAtual  := 0
+	private cSaldoAtual  := ""
+	private cObsPedido   := ""
+	private oPanelRodape := nil
+	private oSaySaldo    := nil
+	private oObsPedido   := nil
+	private lFilProd     := .f.
+	private aDadosProd   := {}
+	private dDataEntrega 	 := stod("")
+	private lListaProgramado := .t.
+	private cTransportadora  := ""
+	private lDebug 			:= if(IsInCallStack("U_DEBUG"),.t.,getNewPar("ZZ_DBGLPED",.F.))
+
+	default lPFilProd    := .f.
+	default nPercReducao := nil
+
+	nRecnoC9 := 0
+
+	lFilProd := lPFilProd
+	nModulo := 5
+	if lFilProd
+		aDadosProd := getDadosProd(.f.)
+		/*
+		cIDModel += PREFIXO_PROD
+		cIDGrid += PREFIXO_PROD
+		cIDView += PREFIXO_PROD
+		cIDProgram += PREFIXO_PROD
+		*/
+	endif
+
+	oGrid := GridMVCSQL():New(/*cID*/cIDModel,cIDProgram/*cIDProgram*/,cIDGrid/*cIdModel*/,cIDView/*cIDView*/)
+
+	if isFaturamento()
+		oGrid:setTitle("Sequenciamento Liberação Pedido")
+	elseif isFinanceiro()
+		oGrid:setTitle("Liberação de Crédito")
+	endif
+	oGrid:setMarkField("MARK")
+
+	oGrid:addTypeField("C6_ENTREG","D",8,0)
+	oGrid:addTypeField("C5_EMISSAO","D",8,0)
+	oGrid:addTypeField("SALDO","N",getSX3Cache("C9_PRCVEN","X3_TAMANHO"),getSX3Cache("C9_PRCVEN","X3_DECIMAL"))
+	oGrid:addTypeField("C9_QTDLIB","N",getSX3Cache("C9_QTDLIB","X3_TAMANHO"),getSX3Cache("C9_QTDLIB","X3_DECIMAL"))
+	oGrid:addTypeField("QTD_LIB_ORIGINAL","N",getSX3Cache("C9_QTDLIB","X3_TAMANHO"),getSX3Cache("C9_QTDLIB","X3_DECIMAL"))
+	oGrid:addTypeField("VLR_PENDENTE","N",getSX3Cache("B2_QATU","X3_TAMANHO"),getSX3Cache("B2_QATU","X3_DECIMAL"))
+
+	oGrid:setQuery(getQuery())
+	oGrid:setShowMarkAll(.f.)
+	oGrid:setViewDef({|oView| modifyView(oView)})
+	oGrid:setModelDef({|oView| modifyModel(oView)})
+	oGrid:setPercentGrid(90)
+
+	if lFilProd
+		oGrid:getModelDef():setLoadGrid({|oModel| aDadosProd})
+	endif
+
+	aAdd(aEnableButtons ,{.f. ,nil})		 //1 - Copiar
+	aAdd(aEnableButtons ,{.f. ,nil})         //2 - Recortar
+	aAdd(aEnableButtons ,{.f. ,nil})         //3 - Colar
+	aAdd(aEnableButtons ,{.f. ,nil})         //4 - Calculadora
+	aAdd(aEnableButtons ,{.f. ,nil})         //5 - Spool
+	aAdd(aEnableButtons ,{.f. ,nil})         //6 - Imprimir
+	if isFinanceiro()
+		aAdd(aEnableButtons ,{.t. ,'Lib. Crédito'})    //7 - Confirmar
+	else
+		aAdd(aEnableButtons ,{.t. ,'Gravar'})    //7 - Confirmar
+	endif
+	aAdd(aEnableButtons ,{.t. ,"Cancelar"})  //8 - Cancelar
+	aAdd(aEnableButtons ,{.f. ,nil})         //9 - WalkTrhough
+	aAdd(aEnableButtons ,{.f. ,nil})         //10 - Ambiente
+	aAdd(aEnableButtons ,{.f. ,nil})         //11 - Mashup
+	aAdd(aEnableButtons ,{.f. ,nil})         //12 - Help
+	aAdd(aEnableButtons ,{.f. ,nil})         //13 - Formulário HTML
+	aAdd(aEnableButtons ,{.f. ,nil})         //14 - ECM
+
+	SetKey(VK_F4,{|| saldosEmEstoque()})
+	if !lFilProd
+		SetKey(VK_F5,{|| refreshScreen()})
+	endif
+
+	lConfirmou := oGrid:activate(/*nOperation*/,aEnableButtons,nPercReducao/*nPercReducao*/,/*cTitle*/,/*bCloseOnOK*/,/*bOk*/,/*bCancel*/)
+
+	if !lConfirmou
+		nRecnoC9 := 0
+	endif
+
+	if !lFilProd
+		SetKey(VK_F4,nil)
+		SetKey(VK_F5,nil)
+	else
+		aDados := aDadosProd
+	endif
+return lConfirmou
+
+static function getQuery()
+	local cQuery := ''
+
+	if !lFilProd
+		ask()
+	endif
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "	'F' AS MARK," + CRLF
+	cQuery += "	CASE" + CRLF
+	cQuery += "		WHEN C9_BLCRED <>'' AND C9_BLCRED<>'10' AND C9_BLCRED<>'ZZ' AND C9_BLCRED <> '09' THEN 'BR_AZUL'" + CRLF
+	cQuery += "		WHEN (C9_BLCRED = '10' AND C9_BLEST = '10') Or (C9_BLCRED = 'ZZ' AND C9_BLEST = 'ZZ') THEN 'BR_VERMELHO'" + CRLF
+	cQuery += "		WHEN C9_BLEST ='' AND C9_BLCRED = '' AND (C9_BLWMS>='05' OR C9_BLWMS='  ') AND C9_BLTMS = '' THEN 'BR_VERDE'" + CRLF
+	cQuery += "		WHEN C9_BLCRED = '09' AND C9_BLCRED <> '10'AND C9_BLCRED <> 'ZZ' THEN 'BR_MARROM'" + CRLF
+	cQuery += "		WHEN C9_BLEST<>'  ' AND C9_BLEST<>'10'AND C9_BLEST<>'ZZ' THEN 'BR_PRETO'" + CRLF
+	cQuery += "		WHEN C9_BLWMS<='05' AND C9_BLWMS<>'  ' THEN 'BR_AMARELO'" + CRLF
+	cQuery += "		WHEN C9_BLTMS <> ' ' THEN 'BR_LARANJA'" + CRLF
+	cQuery += "		ELSE 'BR_CANCEL'" + CRLF
+	cQuery += "	END AS LEG," + CRLF
+	cQuery += "	C9_PEDIDO+'-'+C9_ITEM AS PEDIDO_ITEM," + CRLF
+	cQuery += "	SITUACAO," + CRLF
+	cQuery += "	C5_EMISSAO," + CRLF
+	cQuery += "	C6_ENTREG," + CRLF
+	cQuery += "	C5_CLIENTE+'/'+C5_LOJACLI+':'+A1_NOME AS CLIENTE," + CRLF
+	cQuery += "	C9_PRODUTO +'-'+ B1_DESC AS DESC_PRODUTO," + CRLF
+	cQuery += "	C9_PRODUTO," + CRLF
+	cQuery += "	C9_QTDLIB AS QTD_LIB_ORIGINAL," + CRLF
+	cQuery += "	C9_QTDLIB," + CRLF
+	cQuery += "	B2_QATU - SUM(CASE " + CRLF
+	cQuery += "		WHEN C9_BLEST ='' AND C9_BLCRED = '' AND (C9_BLWMS>='05' OR C9_BLWMS='  ') AND C9_BLTMS = '' THEN 0 " + CRLF
+	cQuery += "		ELSE C9_QTDLIB " + CRLF
+	cQuery += "	END) OVER (	Partition By C9_PRODUTO " + CRLF
+	cQuery += "				Order by C9_PEDIDO,C9_PRODUTO,C9_ITEM rows unbounded preceding) AS SALDO," + CRLF
+	cQuery += "	C9_QTDLIB * C9_PRCVEN AS VLR_PENDENTE," + CRLF
+	cQuery += "	C5_TRANSP + '-' + A4_NOME AS TRANSPORTADORA," + CRLF
+	cQuery += "	B2_QATU," + CRLF
+	cQuery += "	C9_BLEST," + CRLF
+	cQuery += "	C9_BLCRED," + CRLF
+	cQuery += "	C9_PEDIDO," + CRLF
+	cQuery += "	C9_ITEM," + CRLF
+	cQuery += "	C9RECNO," + CRLF
+	cQuery += "	C5RECNO," + CRLF
+	cQuery += "	CONVERT(VARCHAR(8000),CONVERT(VARBINARY(8000),C5_ZZIFCPL)) C5_ZZIFCPL," + CRLF
+	cQuery += "	0 AS LINHA" + CRLF
+	cQuery += "FROM" + CRLF
+
+	cQuery += "(" + CRLF
+	cQuery += "SELECT" + CRLF
+	cQuery += "	SC9.R_E_C_N_O_ AS C9RECNO," + CRLF
+	cQuery += "	SC5.R_E_C_N_O_ AS C5RECNO," + CRLF
+	cQuery += "	SC6.R_E_C_N_O_ AS C6RECNO," + CRLF
+	cQuery += u_regraSituacao()
+	cQuery += "	B1_ZZPE" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SC9') + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SC5') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SC5') + CRLF
+	cQuery += "	AND C5_NUM = C9_PEDIDO" + CRLF
+	cQuery += "	AND C5_TIPO = 'N'" + CRLF
+	if !empty(cTransportadora)
+		cQuery += "	AND C5_TRANSP = '" + cTransportadora + "'" + CRLF
+	endif
+	cQuery += "	AND " + RetSqlDel('SC5') + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SC6') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SC6') + CRLF
+	cQuery += "	AND C6_NUM = C9_PEDIDO" + CRLF
+	cQuery += "	AND C6_ITEM = C9_ITEM" + CRLF
+	if !empty(dDataEntrega)
+		cQuery += "	AND C6_ENTREG <= '" + dtos(dDataEntrega) + "'" + CRLF
+	endif
+	cQuery += "	AND " + RetSqlDel('SC6') + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SB1') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SB1') + CRLF
+	cQuery += "	AND B1_COD = C9_PRODUTO" + CRLF
+	cQuery += "	AND " + RetSqlDel('SB1') + CRLF
+
+	cQuery += "LEFT JOIN" + CRLF
+	cQuery += "(" + CRLF
+	cQuery += "SELECT" + CRLF
+	cQuery += "	C9_FILIAL AS FILIAL," + CRLF
+	cQuery += "	C9_PEDIDO AS PEDIDO," + CRLF
+	cQuery += "	C9_ITEM AS ITEM," + CRLF
+	cQuery += "	SUM(C9_QTDLIB) AS QTDLIB" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + retSqlTab("SC9") + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + retSqlFil("SC9") + CRLF
+	cQuery += "	AND SC9.C9_NFISCAL = ' '" + CRLF
+	cQuery += "	AND C9_BLEST = ' '" + CRLF
+	cQuery += "	AND C9_BLCRED = ' '" + CRLF
+	cQuery += "	AND " + retSqlDel("SC9") + CRLF
+	cQuery += "GROUP BY" + CRLF
+	cQuery += "	C9_FILIAL," + CRLF
+	cQuery += "	C9_PEDIDO," + CRLF
+	cQuery += "	C9_ITEM" + CRLF
+	cQuery += ") C9QTDLIB" + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "AND FILIAL = C9_FILIAL" + CRLF
+	cQuery += "AND PEDIDO = C9_PEDIDO" + CRLF
+	cQuery += "AND ITEM = C9_ITEM" + CRLF
+
+	cQuery += ") C9" + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SC9') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND SC9.R_E_C_N_O_ = C9.C9RECNO " + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SC6') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND SC6.R_E_C_N_O_ = C9.C6RECNO " + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SC5') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND SC5.R_E_C_N_O_ = C9.C5RECNO " + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SA4') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SA4') + CRLF
+	cQuery += "	AND A4_COD = C5_TRANSP" + CRLF
+	cQuery += "	AND " + RetSqlDel('SA4') + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SA1') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SA1') + CRLF
+	cQuery += "	AND A1_COD = C5_CLIENTE" + CRLF
+	cQuery += "	AND A1_LOJA = C5_LOJACLI" + CRLF
+	cQuery += "	AND " + RetSqlDel('SA1') + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SB1') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SB1') + CRLF
+	cQuery += "	AND B1_COD = C9_PRODUTO" + CRLF
+	cQuery += "	AND " + RetSqlDel('SB1') + CRLF
+
+	cQuery += "CROSS APPLY" + CRLF
+	cQuery += "(" + CRLF
+	cQuery += "SELECT" + CRLF
+	cQuery += "	B2_COD," + CRLF
+	cQuery += "	SUM(B2_QATU-B2_RESERVA) AS B2_QATU" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SB2') + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SB2') + CRLF
+	cQuery += "	AND B2_COD = C6_PRODUTO" + CRLF
+	cQuery += "	AND " + RetSqlDel('SB2') + CRLF
+	cQuery += "GROUP BY B2_COD" + CRLF
+	cQuery += ") SB2" + CRLF
+
+	cQuery += "WHERE 1=1" + CRLF
+	//SE FOR A TELA DE FILTRO DE PRODUTO NÃO CARREGA OS DADOS POIS SERÃO CARREGADOS A PARTIR DA MEMÓRIA
+	if lFilProd
+		cQuery += " AND 1=2" + CRLF
+	endif
+	cQuery += "	AND " + RetSqlFil('SC9') + CRLF
+	cQuery += "	AND NOT ((C9_BLCRED='10'And C9_BLEST='10') OR (C9_BLCRED='ZZ' AND C9_BLEST='ZZ')) --PEDIDOS NAO FATURADO" + CRLF
+	if lDebug
+		cQuery += "	AND C9_PRODUTO LIKE '30.20.02%'" + CRLF
+	endif
+	if !empty(getSX3Cache("Z3_CLIENTE","X3_CAMPO"))
+		cQuery += "	AND NOT EXISTS (" + CRLF
+		cQuery += "	SELECT * FROM" + CRLF
+		cQuery += "		" + RetSqlTab('SZ3') + CRLF
+		cQuery += "	WHERE 1=1" + CRLF
+		cQuery += "		AND " + RetSqlFil('SZ3') + CRLF
+		cQuery += "		AND (Z3_PEDIDO = C9_PEDIDO" + CRLF
+		cQuery += "			OR Z3_PRODUTO = C9_PRODUTO" + CRLF
+		cQuery += "			OR (Z3_CLIENTE = C9_CLIENTE AND Z3_LOJA = C9_LOJA)" + CRLF
+		cQuery += "		)" + CRLF
+		cQuery += "		AND " + RetSqlDel('SZ3') + CRLF
+		cQuery += "	)" + CRLF
+	endif
+	if !lListaProgramado
+		cQuery += "	AND SITUACAO <> '" + PROGRAMADO + "'" + CRLF
+	endif
+	cQuery += "	AND " + RetSqlDel('SC9') + CRLF
+	cQuery += "ORDER BY C9_PEDIDO,C9_ITEM" + CRLF
+return cQuery
+
+static function modifyModel(oModel)
+	local oGrid   := oModel:getModel(cIDGrid)
+	local oStruct := oGrid:getStruct()
+	local bValid  := FWBuildFeature( STRUCT_FEATURE_VALID,"u_vldQtdLib()")
+	local bMark   := FWBuildFeature( STRUCT_FEATURE_VALID,"u_vldMark()")
+
+	oGrid:SetMaxLine(99999999)
+	oGrid:SetLPre({|oGrid,nLine,cAction,cIDField,xNewValue,xOldValue| linePre(oGrid,nLine,cAction,cIDField,xNewValue,xOldValue)})
+
+	oStruct:setProperty( 'C9_QTDLIB' ,MODEL_FIELD_VALID ,bValid)
+	oStruct:setProperty( 'MARK' ,MODEL_FIELD_VALID ,bMark)
+
+	oModel:SetCommit({|oModel| myCommit(oModel)})
+return oModel
+
+static function modifyView(oView)
+	local aView      := oView:GetViewObj(cIDView)
+	local oGrid      := aView[3]
+	local oStruct    := oGrid:getStruct()
+	local nTamDesc   := 250
+	local nTamCli    := 190
+	local nTamNum    := 110
+	local nTamDt     := 80
+	local nTamPedido := 80
+	local bDoubleClick := {|oFormulario,cFieldName,nLineGrid,nLineModel| doubleClick(cFieldName)}
+	local bChangeLine  := {|oView, cViewID| ChangeLine(oView, cViewID) }
+	oView:SetViewProperty("*", "ENABLENEWGRID")
+	oView:SetViewProperty("*", "GRIDSEEK",{.t.})
+
+	//oView:SetViewProperty("*", "GRIDFILTER",{.t.})
+	//oView:SetContinuousForm(.t.)
+
+	oStruct:setProperty( 'SITUACAO'     ,MVC_VIEW_WIDTH,nTamPedido)
+
+	oStruct:setProperty( 'PEDIDO_ITEM'     ,MVC_VIEW_WIDTH,nTamPedido)
+
+	oStruct:setProperty( 'DESC_PRODUTO'     ,MVC_VIEW_WIDTH,nTamDesc)
+	oStruct:setProperty( 'CLIENTE' 		    ,MVC_VIEW_WIDTH,nTamCli)
+
+	oStruct:setProperty( 'C9_QTDLIB'	    ,MVC_VIEW_WIDTH,nTamNum)
+	oStruct:setProperty( 'VLR_PENDENTE'	    ,MVC_VIEW_WIDTH,nTamNum)
+	oStruct:setProperty( 'SALDO'	        ,MVC_VIEW_WIDTH,nTamNum)
+	oStruct:setProperty( 'QTD_LIB_ORIGINAL' ,MVC_VIEW_WIDTH,nTamNum)
+	oStruct:setProperty( 'B2_QATU'          ,MVC_VIEW_WIDTH,nTamNum)
+
+	oStruct:setProperty( 'C6_ENTREG'        ,MVC_VIEW_WIDTH,nTamDt)
+	oStruct:setProperty( 'C5_EMISSAO'       ,MVC_VIEW_WIDTH,nTamDt)
+
+	oStruct:setProperty( 'LEG'       ,MVC_VIEW_PICT,'@BMP')
+
+	oStruct:setProperty( '*'	    	,MVC_VIEW_CANCHANGE,.F.)
+	oStruct:setProperty( 'MARK'	    	,MVC_VIEW_CANCHANGE,.T.)
+	oStruct:setProperty( 'C9_QTDLIB'	,MVC_VIEW_CANCHANGE,.T.)
+
+	oStruct:RemoveField("C5_ZZIFCPL")
+	oStruct:RemoveField("C9_PRODUTO")
+	oStruct:RemoveField("C9_PEDIDO")
+	oStruct:RemoveField("C9_ITEM")
+	oStruct:RemoveField("C9_BLEST")
+	oStruct:RemoveField("C9_BLCRED")
+	oStruct:RemoveField("C9RECNO")
+	oStruct:RemoveField("C5RECNO")
+	oStruct:RemoveField("B2_QATU")
+	oStruct:RemoveField("LINHA")
+
+	if isFinanceiro()
+		oStruct:RemoveField("MARK")
+	endif
+
+	oView:AddOtherObject("RODAPE", {|oPanel,oView| rodape(oPanel,oView)})
+	oView:CreateHorizontalBox( "RODAPE_BOX", 10 )
+	oView:SetOwnerView( 'RODAPE',    "RODAPE_BOX")
+
+	oView:SetAfterViewActivate({|oView|afterViewActivate(oView)})
+
+	oView:SetViewProperty(cIDView,"GRIDDOUBLECLICK",{bDoubleClick})
+	oView:SetViewProperty(cIDView,"CHANGELINE   ",{bChangeLine})
+	if lFilProd
+		oView:addUserButton("Zera Qtd Lib", "MAGIC_BMP"/*<cResource >*/, {|oView| zeraQtdLib(oView)}/*<bBloco >*/, "Zera a quantidade liberada do produto que está acima da linha posicionada"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+	elseif isFaturamento()
+		oView:addUserButton("Seq Lib Produto", "MAGIC_BMP"/*<cResource >*/, {|oView| u_SeqLibProd()}/*<bBloco >*/, "Realiza a liberação de estoque para os pedidos selecionados"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+		oView:addUserButton("Filtro Cli/Prod", "MAGIC_BMP"/*<cResource >*/, {|oView| u_CadCliPVXSeqLib()}/*<bBloco >*/, "Realiza a liberação de estoque para os pedidos selecionados"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+		oView:addUserButton("Exportar Excel", "MAGIC_BMP"/*<cResource >*/, {|oView| FwMsgRun( ,{ || exportExcel() }, "SOLPACK", "Exportando Dados para o Excel..." )}/*<bBloco >*/, "Realiza a liberação de estoque para os pedidos selecionados"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+		oView:addUserButton("Visualiza Pedido", "MAGIC_BMP"/*<cResource >*/, {|oView| visualizaPedido(oView)}/*<bBloco >*/, "Realiza a liberação de estoque para os pedidos selecionados"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+		oView:addUserButton("F4 - Saldos em Estoque", "MAGIC_BMP"/*<cResource >*/, {|oView| saldosEmEstoque(oView)}/*<bBloco >*/, "Realiza a liberação de estoque para os pedidos selecionados"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+		oView:addUserButton("Prep. Doc", "MAGIC_BMP"/*<cResource >*/, {|oView| prepDoc(oView)}/*<bBloco >*/, "Realiza a geração da NF para o Pedido posicionado"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+	elseif isFinanceiro()
+		//oView:addUserButton("Lib. Estoque", "MAGIC_BMP"/*<cResource >*/, {|oView| libEstoque(oView)}/*<bBloco >*/, "Realiza a liberação de estoque para os pedidos selecionados"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+	endif
+
+	oView:addUserButton("F5 - Atualiza Tela", "MAGIC_BMP"/*<cResource >*/, {|oView| refreshScreen(oView)}/*<bBloco >*/, "Realiza a liberação de estoque para os pedidos selecionados"/*[ cToolTip ]*/, /*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+
+	oView:showUpdateMsg(.f.)
+	oView:showInsertMsg(.f.)
+	oView:SetCloseOnOK({||lFilProd})
+return oView
+
+user function vldQtdLib()
+	local lRet      := .t.
+	local cProblema := ""
+	local cSolucao  := ""
+
+	BEGIN SEQUENCE
+		if !positivo()
+			break
+		endif
+
+		if FwFldGet("C9_QTDLIB") > FwFldGet("QTD_LIB_ORIGINAL")
+			cProblema := "A quantidade digitada não pode ser maior que a quantidade orignal de liberação!"
+			cSolucao := "Digite um valor menor ou igual a " + cValToChar(FwFldGet("QTD_LIB_ORIGINAL"))
+			break
+		endif
+
+		if !u_SOFAT001(FwFldGet('C9_PRODUTO'),FwFldGet('C9_QTDLIB'))
+			cProblema := "Quantidade múltipla do produto inválida"
+			break
+		endif
+
+		u_RecalcSeqLibPed(FwIsInCallStack("ZERAQTDLIB")/*lAuto*/)
+		ChangeLine(FwViewActive())
+		RECOVER
+		lRet := .f.
+		if !empty(cProblema)
+			u_myHelp(cProblema,cSolucao)
+		endif
+	END SEQUENCE
+return lRet
+
+user function vldMark()
+	local lRet      := .t.
+	local lMark     := FwFldGet("MARK")
+	local lHelp     := !FwIsInCallStack("MARKALL")
+	local cProblema := ""
+	local cSolucao  := ""
+
+	BEGIN SEQUENCE
+
+		if !lMark
+			BREAK
+		endif
+
+		if !empty(FwFldGet("C9_BLCRED"))
+			cProblema := "Pedido bloqueado por crédito."
+			BREAK
+		endif
+
+		if empty(FwFldGet("C9_BLEST")) .and. FwFldGet("C9_QTDLIB") == FwFldGet("QTD_LIB_ORIGINAL")
+			cProblema := "Pedido já liberado por estoque."
+			BREAK
+		endif
+
+		if FwFldGet("C9_QTDLIB") == 0 .and. !isLibCredEstoque()
+			cProblema := "Não é possível marcar um pedido para liberação, cujo campo Qt. Liberada é igual a 0"
+			BREAK
+		endif
+
+		if FwFldGet("C9_QTDLIB") > FwFldGet("QTD_LIB_ORIGINAL") .and. FwFldGet("SALDO") < 0
+			cProblema := "Não há saldo para liberar o pedido"
+			cSolucao := "Selecione um pedido cujo campo SALDO seja maior que 0"
+			BREAK
+		endif
+
+		SC9->(dbGoTo(FwFldGet("C9RECNO")))
+
+		posicione("SB2",1,xFilial("SB2")+SC9->(C9_PRODUTO+C9_LOCAL),"!EOf()")
+		
+		if FwFldGet("SALDO") < 0 .or. SB2->(saldoSB2()) - FwFldGet("C9_QTDLIB") < 0
+			cProblema := "Não há saldo DISPONÍVEL no sistema para liberar o pedido"
+			cSolucao := "Verifique o saldo reservado para o produto no sistema!"
+			BREAK
+		endif
+
+		RECOVER
+		lRet := empty(cProblema)
+		if lHelp
+			u_myHelp(cProblema,cSolucao)
+		endif
+	END SEQUENCE
+return lRet
+
+static function libEstoque(oView)
+	fwMsgRun(, {|| runLibEstoque(oView)}, "LIB. ESTOQUE","Aguarde, realizando a liberação do estoque...")
+return
+
+static function runLibEstoque(oView)
+	local oModel   := oView:getModel()
+	local oGrid    := oModel:getModel(cIDGrid)
+	local nQtdLine := oGrid:Length()
+	local nLine    := 0
+	local lRet     := .t.
+	local lLibOK   := .t.
+	local lMark	   := .f.
+	local aProd	   := {}
+	local nProd    := 0
+
+	for nLine := 1 to nQtdLine
+		oGrid:goLine(nLine)
+
+		if oGrid:isDeleted() .or. !oGrid:getValue("MARK")
+			loop
+		endif
+
+		nPos := aScan(aProd,{|X|X[1] == oGrid:getValue("DESC_PRODUTO")})
+		if nPos == 0
+			aAdd(aProd,{oGrid:getValue("DESC_PRODUTO"),{{nLine,getPeso(oGrid:getValue("LEG"))}}})
+		else
+			aAdd(aProd[nPos,2],{nLine,getPeso(oGrid:getValue("LEG"))})
+		endif
+	next nLine
+
+	for nProd := 1 to len(aProd)
+		aLines := aProd[nProd,2]
+
+		aSort(aLines,,, {|x,y| y[2] > x[2]})
+
+		for nLine := 1 to len(aLines)
+			oGrid:goLine(aLines[nLine,1])
+
+			if oGrid:isDeleted() .or. !oGrid:getValue("MARK")
+				loop
+			endif
+			lMark := .t.
+			SC9->(dbGoTo(oGrid:getValue("C9RECNO")))
+
+			lLibOK := PVAuto():libEstoque(oGrid:getValue("C9_QTDLIB"))
+
+			if !lLibOK
+				lRet := .f.
+			else
+				isLibLocked(.t.)
+			endif
+		next nLine
+	next nProd
+
+	if !lMark
+		lRet := .f.
+		msgAlert("Não há pedidos marcados para realizar a liberação!")
+	endif
+return lRet
+
+static function zeraQtdLib(oView)
+	local oModel   := oView:getModel()
+	local oGrid    := oModel:getModel(cIDGrid)
+	local aRows    := FwSaveRows()
+	local cProduto := oGrid:getValue("C9_PRODUTO")
+	local nLine    := 0
+	local lRet     := .t.
+	local nLineAnt := oGrid:GetLine()-1
+
+	for nLine := nLineAnt to 1 step -1
+		oGrid:goLine(nLine)
+
+		if oGrid:isDeleted() .or. oGrid:getValue("MARK") .or. cProduto != oGrid:getValue("C9_PRODUTO") .or. !oGrid:CanSetValue("C9_QTDLIB")
+			loop
+		endif
+
+		lRet := oGrid:setValue("C9_QTDLIB",0)
+	next nLine
+
+	FwRestRows(aRows)
+	oView:refresh(cIDView)
+return lRet
+
+static function fake()
+	libEstoque()
+	u_vldQtdLib()
+	fake()
+return
+
+static function doubleClick(cFieldName)
+	local aLegenda := {}
+	if cFieldName == "LEG"
+
+		aadd(aLegenda, {'ENABLE'    , "Item Liberado"})
+		aadd(aLegenda, {'DISABLE'   , "Item Faturado"})
+		aadd(aLegenda, {'BR_AZUL'   , "Item Bloqueado - Credito"})
+		aadd(aLegenda, {'BR_MARROM' , "Item Rejeitado"})
+		aadd(aLegenda, {'BR_PRETO'  , "Item Bloqueado - Estoque"})
+		aadd(aLegenda, {'BR_AMARELO', "Item Bloqueado - WMS"})
+		aadd(aLegenda, {'BR_LARANJA', "Item Bloqueado - TMS"})
+
+		BrwLegenda("Legenda", "STR0049", aLegenda)
+		return .f.
+	elseif cFIeldName <> 'MARK'
+		FwFldPut('MARK',!FwFldGet('MARK'),/*nLinha*/,/*oModel*/,.t./*lShowMsg*/,.f./*lLoad*/)
+	endif
+return .t.
+
+static function refreshScreen(oView,lAuto)
+	default oView := FwViewActive()
+	default lAuto := .f.
+
+	if lAuto .or. msgNoYes("Deseja realmente atualizar a tela? Todos os serão perdidos.")
+		fwMsgRun(, {|| runRefreshScreen(oView)}, "ATUALIZA TELA","Aguarde, atualizando os dados da tela...")
+	endif
+return
+
+static function runRefreshScreen(oView)
+	local oModel   := oView:getModel()
+	local oGrid    := oModel:getModel(cIDGrid)
+	local oUtilMVC := IPUtilMVC():New()
+	local cQuery   := getQuery()
+
+	oUtilMVC:addLineGrid(cQuery,oGrid,.t./*lLoadValue*/,.t./*lClearGrid*/,.f./*lInit*/,.t./*lBlankLine*/)
+return
+
+static function ChangeLine(oView, cViewID)
+	local lRet := .t.
+	local oGrid := oView:getModel(cIDGrid)
+
+	nSaldoAtual := u_RecalcSaldoAtual(oGrid)
+	cSaldoAtual := "Saldo Estoque: " + alltrim(transform(nSaldoAtual,getSX3Cache("B2_QATU","X3_PICTURE")))
+
+	cObsPedido := FwFldGet("C5_ZZIFCPL")
+
+	oSaySaldo:refresh()
+	oObsPedido:refresh()
+	oPanelRodape:refresh()
+return lRet
+
+static function rodape(oPanel,oView)
+	Local oFont18 := TFont():New("MS Sans Serif",,026,,.F.,,,,,.F.,.F.)
+	local nLinha := oPanel:nTop + 10
+
+	oPanelRodape    := TPanel():New( 0,0,"",oPanel,,.F.,.F.,,,0,0,.F.,.F. )
+	oPanelRodape:align := CONTROL_ALIGN_ALLCLIENT
+
+	@ nLinha, 008 SAY oSaySaldo VAR cSaldoAtual SIZE 180, 012 OF oPanel FONT oFont18 COLORS 0, 16777215 PIXEL
+
+	@ nLinha, 150 SAY oSayObs VAR "Obs. PV:" SIZE 180, 012 OF oPanel FONT oFont18 COLORS 0, 16777215 PIXEL
+	@ nLinha, 200 GET oObsPedido VAR cObsPedido OF oPanel MULTILINE SIZE 190, 020 COLORS 0, 16777215 READONLY HSCROLL PIXEL
+return
+
+static function afterViewActivate(oView)
+	if !empty(nRecnoC9)
+		oModel := oView:getModel()
+		oGrid  := oModel:getModel(cIDGrid)
+		aBusca := {}
+		aAdd(aBusca,{"C9RECNO",nRecnoC9})
+
+		if !oGrid:SeekLine(aBusca)
+			oGrid:goLine(1)
+		endif
+
+		oView:refresh()
+	endif
+	ChangeLine(oView)
+return
+
+static function saldosEmEstoque(oView)
+	default oView := FwViewActive()
+	MaViewSB2(FwFldGet("C9_PRODUTO"))
+return
+
+static function visualizaPedido(oView)
+	local nRecnoC5 := FwFldGet("C5RECNO")
+	SC5->(dbGoTo(nRecnoC5))
+	if SC5->(!Eof())
+		MATA410(/*xAutoCab*/,/*xAutoItens*/,/*nOpcAuto*/,/*lSimulacao*/,"A410VISUAL"/*cRotina*/)
+	endif
+return
+
+static function exportExcel()
+	local oView      := FwViewActive()
+	local aViewGrid  := oView:GetViewObj("VIEW_GRID")
+	local oGrid      := aViewGrid[3]
+	local oGridModel := oView:getModel("MODEL_GRID")
+	local nLine      := 0
+	local oStruct    := oGrid:getStruct()
+	local oStructModel := oGridModel:getStruct()
+	local nFields    := 0
+	local aFields    := oStruct:GetFields()
+	local nQtdFields := len(aFields)
+	local cId        := ""
+	local cTitulo    := ""
+	local cTipo      := ""
+	local nTamanho   := 0
+	local nDecimal   := 0
+	local aItem      := {}
+	local oExcel     := FWMsExcel():New()
+	local cTable	:= "SEQUENCIAMENTO LIBERACAO PEDIDO"
+	local cWorkSheet:= cTable
+	local aRows      := FwSaveRows()
+	oExcel:AddWorkSheet(cWorkSheet)
+	oExcel:AddTable(cWorkSheet,cTable)
+
+	for nLine := 1 to oGridModel:length()
+		oGridModel:goLine(nLine)
+
+		for nFields := 1 to nQtdFields
+			cId      := aFields[nFields][MVC_VIEW_IDFIELD]
+			cTitulo  := aFields[nFields][MVC_VIEW_TITULO]
+			cTipo    := oStructModel:getProperty(cId,MODEL_FIELD_TIPO)
+			nTamanho := oStructModel:getProperty(cId,MODEL_FIELD_TAMANHO)
+			nDecimal := oStructModel:getProperty(cId,MODEL_FIELD_DECIMAL)
+
+			if nLine == 1
+				oExcel:AddColumn(cWorkSheet,cTable,cTitulo,1/*nAlign*/,1/*nFormat*/,.f./*lTotaliza*/)
+			endif
+
+			aAdd(aItem,oGridModel:getValue(cId))
+		next nFields
+
+		oExcel:AddRow(cWorkSheet,cTable,aItem)
+
+		aItem := {}
+	next nLine
+	FwRestRows(aRows)
+	FwMsgRun( ,{ || geraPlan(oExcel) }, "SOLPACK", "Exportando Dados para o Excel..." )
+return
+
+Static Function geraPlan(oExcel)
+	Local cDiretorio	:= ""
+	Local cExtensao	:= ".XML"
+	Local cTexto		:= ""
+	Local cTitle		:= "Planilha Gerada com Sucesso !"
+	Local oExcelApp := MSExcel():New()
+
+	cDiretorio := cGetFile("Arquivos (*" + Upper(cExtensao) + ") | *" + Upper(cExtensao) + " |","Selecione o Local de Destino",,,.F., GETF_RETDIRECTORY+GETF_LOCALHARD+GETF_NETWORKDRIVE)
+	If !Empty(cDiretorio)
+		cDiretorio += "sequenciamento_lib_pedido_" + fwTimeStamp()
+		oExcel:Activate()
+		oExcel:GetXMLFile(cDiretorio + cExtensao)
+
+		cTexto += "Planilha gerada em: " + CRLF
+		cTexto += cDiretorio + cExtensao
+
+		If File(cDiretorio + cExtensao)
+			oExcelApp:WorkBooks:Open(cDiretorio + cExtensao)
+			oExcelApp:setVisible(.T.)
+			Aviso(cTitle,cTexto,{"OK"},3)
+		Else
+			Aviso("Erro","Não foi possível gerar a planilha em " + cDiretorio,{"OK"},3)
+		EndIf
+	EndIf
+Return
+
+static function getPeso(cLegenda)
+	local cPeso := "2"
+
+	if alltrim(cLegenda) == "BR_VERDE"
+		cPeso := "1"
+	endif
+return cPeso
+
+static function isLibCredEstoque()
+return alltrim(FwFldGet("LEG")) == "BR_VERDE"
+
+static function isLibLocked(lUnlock)
+	local cchave := FwFldGet("C9_PEDIDO")
+	local lRet := .t.
+
+	if lUnlock
+		lRet := UnLockByName(cChave,.t./*lEmpresa*/,.t./*lFilial*/)
+	else
+		lRet := LockByName(cChave,.t./*lEmpresa*/,.t./*lFilial*/)
+	endif
+return lRet
+
+static function linePre(oGrid,nLine,cAction,cIDField,xNewValue,xOldValue)
+	local lRet := .t.
+	if cAction == 'CANSETVALUE'
+		if !isLibLocked(.f.)
+			lRet := .f.
+			u_myHelp("Não é possível editar este produto, pois já está sendo editado por outro usuário!")
+		endif
+	endif
+
+	if cAction == 'SETVALUE' .and. cIDField == "MARK" .and. !xNewValue
+		isLibLocked(.t.)
+	endif
+return lRet
+
+
+static function getDadosProd(lGridProd)
+	local aRows    := FwSaveRows()
+	local nField   := 0
+	local nLine    := 0
+	local cGridPrd := if(lGridProd,PREFIXO_PROD,"")
+	local oModel   := FwModelActive()
+	local oGrid    := oModel:getModel(strTran(cIDGrid,cGridPrd,""))
+	local oStruct  := oGrid:getStruct()
+	local aFields  := oStruct:getFields()
+	local cProduto := oGrid:getValue("C9_PRODUTO")
+	local aData    := {}
+	local aAux     := {}
+
+	for nLine := 1 to oGrid:length()
+		oGrid:goLine(nLine)
+
+		if oGrid:isDeleted() .or. cProduto <> oGrid:getValue("C9_PRODUTO")
+			loop
+		endif
+
+		for nField := 1 to len(aFields)
+			cID      := aFields[nField,MODEL_FIELD_IDFIELD]
+
+			if cId == "LINHA"
+				if oGrid:getValue("LINHA") <> 0
+					aAdd(aAux,oGrid:getValue("LINHA"))
+				else
+					aAdd(aAux,oGrid:getLine())
+				endif
+			else
+				aAdd(aAux,oGrid:getValue(cID))
+			endif
+
+		next nField
+
+		aAdd(aData,{oGrid:getDataID(),aClone(aAux)})
+
+		aAux := {}
+	next nLine
+
+	FwRestRows(aRows)
+return aData
+
+static function myCommit(oModel)
+	local lRet := .t.
+
+	nRecnoC9 := FwFldGet("C9RECNO")
+
+	if lFilProd
+		aDadosProd := getDadosProd(lFilProd)
+	elseif isPrepDoc()
+		geraNFSaida()
+	elseif isFaturamento()
+		libEstoque(FwviewActive())
+	elseif isFinanceiro()
+		libCredito(FwviewActive())
+	endif
+return lRet
+
+static function ask()
+	Local aParamBox := {}
+	local lRet      := .f.
+
+	aadd(aParamBox, {1, "Dt Entrega Até"             , stod("")                                    , ""               , ""               , ""   , "" , 70 , .F.}) // MV_PAR01
+	aadd(aParamBox, {2, "Lista PV Programados"		 , "S"                                      , {"S=SIM","N=NAO"}, 50, ""   , .F.})// MV_PAR02
+	aadd(aParamBox, {1, "Transportadora"             , Space(getSX3Cache("C5_TRANSP","X3_TAMANHO")), ""               , "Vazio() .or. ExistCpo('SA4')", "SA4", "" , 70 , .F.}) // MV_PAR03
+
+	If ParamBox(aParamBox,"Filtros Relatório",,,,,,,,"SeqLibPed",.T.,.T.)
+		lRet := .t.
+		dDataEntrega     := MV_PAR01
+		lListaProgramado := MV_PAR02 == "S"
+		cTransportadora  := MV_PAR03
+	EndIf
+return lRet
+
+static function libCredito(oView)
+	local cFunNameBKP := funname()
+	local oModel   := oView:getModel()
+	local oGrid    := oModel:getModel(cIDGrid)
+
+	SetFunName("MATA450")
+
+	SC9->(dbGoTo(oGrid:getValue("C9RECNO")))
+	A450LibMan()
+
+	SetFunName(cFunNameBKP)
+return
+
+static function prepDoc(oView)
+	oView:ButtonOkAction()
+return
+
+static function isFaturamento()
+return nModulo == 5
+
+static function isFinanceiro()
+return nModulo == 6
+
+static function isPrepDoc()
+return isFaturamento() .and. FwIsInCallStack("PrepDoc")
+
+static function geraNFSaida()
+	local nRecnoC5    := FwFldGet("C5RECNO")
+	local lRet        := 0
+	local cFunNameBKP := funname()
+	local aRows       := FwSaveRows()
+	local nProxRecC9  := getProxRec()
+
+	FwRestRows(aRows)
+
+	nRecnoC9 := nProxRecC9
+	if nRecnoC5 > 0
+		SC5->(dbGoTo(nRecnoC5))
+		setFunName("MATA410")
+		MATA410(/*xAutoCab*/,/*xAutoItens*/,/*nOpcAuto*/,/*lSimulacao*/,"Ma410PvNfs"/*cRotina*/)
+		SetFunName(cFunNameBKP)
+		lRet := vldGeracaoNF()
+	endif
+return lRet
+
+static function getProxRec()
+	local oModel  := FwModelActive()
+	local oGrid   := oModel:getModel(cIDGrid)
+	local cPedido := oGrid:getValue("C9_PEDIDO")
+
+	while cPedido == oGrid:getValue("C9_PEDIDO") .and. oGrid:getLine() < oGrid:length()
+
+		oGrid:goLine(oGrid:getLine()+1)
+	enddo
+
+return oGrid:getValue("C9RECNO")
+
+static function vldGeracaoNF()
+	local cAlias := ""
+	local lRet 	 := .t.
+	local cMsg	 := CRLF
+
+	cAlias := queryC9("'10'")
+
+	if (cAlias)->(!eof())
+		while (cAlias)->(!Eof())
+			cMsg += "Pedido: <b>" + (cAlias)->(C9_PEDIDO) + "</b> Item: <b>" + (cAlias)->(C9_ITEM) + "</b> "
+			cMsg += CRLF
+
+			(cAlias)->(dbSkip())
+		enddo
+		lRet := .f.
+	endif
+
+	if !lRet
+		cMsg += "não foi faturado"
+		u_myhelp("Os itens listados não tem nota fiscal gerada " + cMsg )
+	endif
+
+	(cAlias)->(dbCloseArea())
+return lRet
+
+static function queryC9(cNotIn)
+	local cQuery := ""
+	local cAlias := ""
+	default cNotIn := "'10','  '"
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "	C9_PEDIDO," + CRLF
+	cQuery += "	C9_ITEM," + CRLF
+	cQuery += "	C9_BLCRED," + CRLF
+	cQuery += "	C9_BLEST" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + retSqlTab("SC9") + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + retSqlFil("SC9") + CRLF
+	cQuery += "	AND C9_PEDIDO = '" + SC5->C5_NUM + "'" + CRLF
+	cQuery += "	AND (C9_BLEST NOT IN (" + cNotIn + ")" + CRLF
+	cQuery += "	OR C9_BLCRED NOT IN (" + cNotIn + "))" + CRLF
+	cQuery += "	AND C9_NFISCAL  = ' '" + CRLF
+	cQuery += "	AND " + retSqlDel("SC9") + CRLF
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+return cAlias
+

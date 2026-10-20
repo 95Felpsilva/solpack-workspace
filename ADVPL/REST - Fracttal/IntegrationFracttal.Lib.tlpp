@@ -1,0 +1,198 @@
+#include "totvs.ch"
+
+#define AUTO_FIELD_NAME			01
+#define AUTO_FIELD_CONTENT		02
+
+namespace IntegrationFracttal
+
+/*/{Protheus.doc} convDataToJson
+Rotina para converter array em json formatado
+
+@type function
+@version P12  
+@author Gabriel Pereira Santos - CRM Services
+@since 24/01/2024
+@param aAutoCab, array, Array de cabeçalho no formato {"Titulo", "Valor"} 
+@param lBeautify, logical, Indica se Json terá quebra de linha
+@return character, Retorna JSON formatado
+@example
+    IntegrationFracttal.convDataToJson(aAutoCab, lBeautify)
+/*/
+User Function convDataToJson(aAutoCab, lBeautify)
+	Local nField		:= 0
+	Local cField		:= ""
+	Local uContent		:= ""
+	Local cJson 		:= ""
+
+	Default lBeautify	:= .T.
+
+    cJson 	+= '{'
+        
+    If ( lBeautify )
+        cJson += CRLF
+    Endif
+    
+    For nField:=1 to Len(aAutoCab)
+        cField		:= aAutoCab[nField,AUTO_FIELD_NAME]
+        uContent 	:= aAutoCab[nField,AUTO_FIELD_CONTENT]
+
+        cJson  		+= convFieldToJson(cField,uContent)
+
+        If ( nField < Len(aAutoCab) )
+            cJson 	+= ','
+        Endif
+        If ( lBeautify )
+            cJson += CRLF
+        Endif
+    Next nField
+    
+    cJson 	+= '}'
+    
+    If ( lBeautify )
+        cJson += CRLF
+    Endif
+Return cJson
+
+/*/{Protheus.doc} convFieldToJson
+Rotina para converter array do em formato json
+
+@type function
+@version P12
+@author Gabriel Pereira Santos - CRM Services
+@since 24/01/2024
+@param cField, character, Parâmetro contendo o titulo do campos
+@param uContent, variant, Parâmetro contendo o valor do campos
+@example
+        convFieldToJson("Produto", "xxxxxx")
+@return character, Retorna string formatada: "Produto": "xxxxxx"
+/*/
+Static Function convFieldToJson(cField, uContent)
+	Local cType			:= ""
+	Local lUseAspas		:= .T.
+	Local cStrReturn	:= ""
+	
+	cType := ValType(uContent)
+
+	Do Case
+		Case ( cType == "U" )
+			uContent 	:= "null"
+			lUseAspas	:= .F.
+		Case ( cType $ "C,M" )
+			uContent := AllTrim(uContent)
+			If ( uContent == "null" )
+				lUseAspas:= .F.
+			Endif
+			//Retira Aspas do Conteúdo
+			If ( '"' $ uContent .And. !( "{" $ uContent)  )
+				uContent := StrTran(uContent,'"',"'")
+			Endif
+			If ( "{" $ uContent ) 
+				lUseAspas:= .F.
+			Endif
+		Case ( cType == "L" )
+			uContent := Iif(uContent,"true","false")
+			lUseAspas:= .F.
+        Case ( cType == "N" )
+			uContent := AllTrim(cValToChar(uContent))
+			lUseAspas:= .F.
+		Case ( cType == "D" )
+			If ( !Empty(uContent) )
+				uContent := DtoS(uContent)
+				uContent := Substr(uContent,1,4) + "-" + Substr(uContent,5,2)  + "-" + Substr(uContent,7,2)
+			Else
+				uContent := ""
+			Endif
+	EndCase
+
+	If ( !Empty(cField) )
+		cStrReturn	+= '"' + cField + '"'
+		cStrReturn	+= ':'
+	Endif
+	
+	If ( lUseAspas )
+		cStrReturn	+= '"'
+	Endif
+	
+	cStrReturn	+= AllTrim(AllToChar(uContent))
+	
+	If ( lUseAspas )
+		cStrReturn	+= '"'
+	Endif
+	
+Return cStrReturn
+
+/*/{Protheus.doc} getValueCombo
+Rotina para retornar valor do combo X3_CBOX
+
+@type function
+@version P12
+@author Gabriel Pereira Santos - CRM Services
+@since 24/01/2024
+@param cCampo, character, Parâmetro contendo o campos a ser processado o valor
+@param cChave, character, Parâmetro contendo a valor chave para busca
+@example
+        IntegrationFracttal.getValueCombo("B1_TIPOCQ", "M")
+    
+@return character, valor do combo com base na chave informada
+/*/
+User Function getValueCombo(cCampo as character, cChave)
+    Local cValue    := ""
+    Local aCombo    := {}
+    Local nContador := 0 
+
+    aCombo := RetSX3Box(GetSX3Cache(cCampo, "X3_CBOX"),,,1)
+
+    For nContador := 1 To Len(aCombo)
+        If Alltrim(cChave) == aCombo[nContador][2]
+            cValue := aCombo[nContador][3]
+            Exit
+        EndIf
+    Next nContador
+Return cValue
+
+/*/{Protheus.doc} sendMsgFault
+Retorna mensagem de erro para a API
+
+@type function
+@version P12
+@author Gabriel Pereira Santos - CRM Services
+@since 24/01/2024
+@param oRest, object, Arquivo REST em execução
+@param cMsg, character, Mesagem de retorno
+@param nCode, numeric, Status Code de Retorno
+/*/
+User Function sendMsgFault(oRest as object,cMsg as character, nCode as numeric)
+	Local aAutoCab	:= {} as array
+	Local cJson		:= "" as character
+	
+	FWLogMsg(cMsg)
+
+	aAdd( aAutoCab , {"code", nCode} )
+	aAdd( aAutoCab , {"message", cMsg } )
+	cJson := IntegrationFracttal.u_convDataToJson(aAutoCab)
+
+	oRest:setResponse(cJson)
+	oRest:setStatusCode(nCode)
+
+Return
+
+/*/{Protheus.doc} getErrorBlock
+Tratamento de erro fatal
+
+@type function
+@version P12
+@author Gabriel Pereira Santos - CRM Services
+@since 24/01/2024
+@param oError, object, Objeto de error block a ser tratado
+@param cError, character,  Mesagem de erro de retorno ENVIAR POR REFERENCIA
+/*/
+User Function getErrorBlock(oError as object, cError as character) as character	
+	cError := ""
+	
+	cError += CRLF + oError:Description
+	cError += CRLF + oError:ErrorStack
+
+	//Sai do Sequence
+	Break
+	
+Return

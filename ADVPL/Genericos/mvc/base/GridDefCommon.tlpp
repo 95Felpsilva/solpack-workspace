@@ -1,0 +1,133 @@
+#include 'totvs.ch'
+#include 'FwMVCDef.ch'
+/*/{Protheus.doc} GridDefCommon
+Classe com as funcionalidades e atributos comuns entre as classes GRIDDEFMODEL e GRIDDEFVIEW
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+class GridDefCommon
+    public data aOnlyFields  as array
+    public data aTypeField   as array
+    public data aFieldsTable as array
+    public data cMarkField   as character
+
+    public method new() CONSTRUCTOR
+    
+    public method isLoadField()
+    public method addOnlyField()
+    public method addTypeField()
+    public method getTypeField()
+    public method setFieldsTable()
+    public method getFieldsTable()
+    public method setMarkField()
+    public method getMarkField()
+
+endclass    
+/*/{Protheus.doc} GridDefCommon::new
+Método consturtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+method new() class GridDefCommon
+    ::aOnlyFields  := {}
+    ::aTypeField   := {}
+    ::aFieldsTable := {}
+return
+/*/{Protheus.doc} GridDefCommon::isLoadField
+Avalia se o campo deve ou não ser carregado no grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+@param cIDField, character, ID do campo a ser avaliado
+@return logical, se true carrega o campo se false não carrega
+/*/
+method isLoadField(cIDField) class GridDefCommon
+return len(::aOnlyFields) == 0 .or. aScan(::aOnlyFields,{|cField| upper(alltrim(cIDField)) == upper(alltrim(cField))}) > 0
+/*/{Protheus.doc} GridDefCommon::addOnlyField
+Caso deseje carregar apenas alguns campos para o grid utilizar este método
+Caso utilizar este método deverá definir todos os campos
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+@param cIDField, character, Id do campo que deve ser exibido no grid, caso deseje passar mais de 1 campo na string utilize o caracter |
+/*/
+method addOnlyField(cIDField) class GridDefCommon
+	local aFields := {}
+	default cIDField := ""
+
+	aFields := strToKarr(cIDField,"|")
+
+	aEval(aFields,{|cField| aAdd(::aOnlyFields,upper(cField))})
+return
+/*/{Protheus.doc} GridDefCommon::addTypeField
+Adiciona um campo para realizar o TCSETFIELD após rodar a query no banco
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param cField, character, ID do campo
+@param cTipo, character, Tipo do campo
+@param nTamanho, numeric, Tamanho do campo
+@param nDecimal, numeric, Quantidade de decimais do campo, caso seja numerico
+/*/
+method addTypeField(cField,cTipo,nTamanho,nDecimal) class GridDefCommon
+	aAdd(::aTypeField,{cFIeld,cTipo,nTamanho,nDecimal})
+return
+/*/{Protheus.doc} GridDefCommon::getTypeField
+Retorna o array com os campos do grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return array, Retorna o array com os campos do grid
+/*/
+method getTypeField() class GridDefCommon
+return ::aTypeField
+/*/{Protheus.doc} GridDefCommon::setFieldsTable
+Atribui o array com os campos do grid
+@type method
+@version  12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param aFieldsTable, array, array com os campos do grid
+/*/
+method setFieldsTable(aFieldsTable) class GridDefCommon
+    ::aFieldsTable := aFieldsTable
+return
+/*/{Protheus.doc} GridDefCommon::getFieldsTable
+Retorna o array com os campos do grid
+@type method
+@version  12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return array,Retorna o array com os campos do grid
+/*/
+method getFieldsTable() class GridDefCommon
+return ::aFieldsTable
+/*/{Protheus.doc} GridDefCommon::setMarkField
+Atribui o campo que será utilizado no grid como MARK
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cField, character, Id do campo
+/*/
+method setMarkField(cField) class GridDefCommon
+	::cMarkField := cField
+return
+/*/{Protheus.doc} GridDefCommon::getMarkField
+Retorna o ID do campo que é utilizado como mark no grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, ID do campo que é utilizado como mark no grid
+/*/
+method getMarkField() class GridDefCommon
+return ::cMarkField

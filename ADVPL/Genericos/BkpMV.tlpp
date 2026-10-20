@@ -1,0 +1,48 @@
+#include 'totvs.ch'
+/*/{Protheus.doc} saveMV
+Salva o conteudo dos MV em um array
+@type function
+@version 12.1.27
+@author Tiago Faria
+@since 14/09/2021
+@param nParametro, numeric, Numero maximo do parametro que deve ser salvo
+@return array, Retorna o array com o bkp do MV
+/*/
+user function saveMV(nParametro)
+	local nI 	:= 0
+	local aMV	:= {} 
+	local cSeq	:= ""
+	local cPar	:= ""
+	default nParametro := 60
+
+	if nParametro > 60
+		nParametro := 60
+	endif
+
+	for nI := 1 to nParametro
+		cSeq := strzero(nI,2)
+		cPar := "MV_PAR"+cSeq
+		aAdd(aMV,{cPar,&(cPar)})
+	next nI
+return aMV
+/*/{Protheus.doc} restoreMV
+Restaura o conteudo do MV de acordo com o array recebido por parametro
+@type function
+@version 12.1.27
+@author Tiago Faria
+@since 14/09/2021
+@param aMV, array, Array com o BKP do MV realizado pela funçãp u_saveMV()
+/*/
+user function restoreMV(aMV)
+	local nI 		:= 0
+	local cPar		:= ""
+	local xContent	:= nil
+	default aMV := {}
+
+	for nI := 1 to len(aMV)
+		cPar 		:= aMV[nI,1]
+		xContent 	:=  aMV[nI,2]
+
+		&(cPar) := xContent
+	next nI
+return

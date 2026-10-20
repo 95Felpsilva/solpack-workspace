@@ -1,0 +1,131 @@
+#include 'totvs.ch'
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+
+/*/{Protheus.doc} DocsAcess
+Rest retorna documentos
+@type class
+@version 12.1.2410
+@author Felipe Silva.
+@since 24/07/2025
+/*/
+class DocsAcess
+	public method new()
+	public method GetProdutos() as character
+	public method GetTurnos() as character
+	public method GetFiltrar() as character
+
+	@Get("/solpack/lista-documentos/:documento")
+	public method ListaDocumentos() as logical
+
+    @Get("/solpack/abre-documento/:caminho")
+	public method AbreDocumento() as logical
+endclass
+
+/*/{Protheus.doc} DocsAcess::new
+MÃ©todo construtor da classe
+@type method
+@version 12.1.2410
+@author Felipe Silva
+@since 11/07/2025
+@return object, retorna a instancia da classe
+/*/
+method new() class DocsAcess
+return self
+
+/*/{Protheus.doc} DocsAcess::ListaProdutos
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 11/07/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method ListaDocumentos() as logical class DocsAcess
+    local jParams   := oRest:getPathParamsRequest()
+	local jResponse := JSonObject():New()
+    local cArquivo  := jParams['documento']
+    local aFiles    := {}
+    local nI        := 0
+    local nTamanho  := 0
+
+    if cArquivo == 'inicio' .or. Empty(cArquivo)
+        aFiles  := Directory("/documentacao/*.*", "D")
+    else
+        aFiles  := Directory("/documentacao/" + cArquivo + "/*.*", "D")
+    endif
+
+    nTamanho := Len(aFiles)
+
+    for nI := 1 to nTamanho
+        if nI <= Len(aFiles)
+            if "." $ Alltrim(aFiles[nI][1]) .and. Alltrim(aFiles[nI][5]) == "D"
+                //Exclui aposição atual do Array
+                aDel(aFiles, nI)
+
+                //Redimensiona o Array, diminuindo 1 posição
+                aSize(aFiles, Len(aFiles) - 1)
+
+                //Altera variáveis de controle, diminuindo elas
+                nTamanho--
+                nI--
+            endif
+        endif
+    next nI
+
+    //Ordena o Array por ordem alfabética
+    aSort(aFiles)
+
+    jResponse["items"] 		:= aFiles
+    jResponse["hasNext"]	:= .f.
+
+	oRest:SetResponse(jResponse:ToJson())
+return .t.
+
+/*/{Protheus.doc} DocsAcess::ListaProdutos
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 11/07/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method AbreDocumento() as logical class DocsAcess
+    local jParams   := oRest:getPathParamsRequest()
+    local cPath     := DecodeUTF8(StrTran(jParams['caminho'], '$', '/'), "cp1252")
+    Local oFile 	:= nil
+    local cFullFile := ""
+    local cJson     := ""
+
+    oFile := FwFileReader():New("/documentacao/" + cPath) // CAMINHO ABAIXO DO ROOTPATH
+
+	// SE FOR POSSÍVEL ABRIR O ARQUIVO, LEIA-O
+	// SE NÃO, EXIBA O ERRO DE ABERTURA
+	if (oFile:Open())
+		cFullFile := oFile:FullRead() // EFETUA A LEITURA DO ARQUIVO
+
+		// RETORNA O ARQUIVO PARA DOWNLOAD
+        oRest:setKeyHeaderResponse('Content-Type','application/pdf')
+		oRest:SetResponse(cFullFile)
+		oFile:Close()
+	else
+		cJson := GetMsgJson("Não foi possivel abrir o arquivo: " + cFile)
+		SetRestFault(400, cJson)
+	endif
+return .t.
+
+static function GetMsgJson(cMessage,cDetailMessage,cErro)
+	local cJSon	:= ""
+	local oJson := JsonObject():new()
+
+	default cMessage 		:= ""
+	default cDetailMessage 	:= cMessage
+	default cErro 			:= "400"
+
+	oJson['code']			:= cErro
+	oJson['message']		:= cMessage
+	oJson['detailedMessage']:= cDetailMessage
+
+	cJson := oJson:toJson()
+	cJson := FwNoAccent(cJson)
+return cJson

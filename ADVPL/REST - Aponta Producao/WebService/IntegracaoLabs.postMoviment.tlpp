@@ -1,0 +1,177 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+
+namespace IntegracaoLabs
+
+/*/{Protheus.doc} postMoviment
+
+Inclusão de movimentos internos via API
+
+@type function
+@author Gabriel Pereira - CRM Services
+@since 12/12/2022
+@version P12
+@database ORACLE
+
+@param [oClassRestFul], object, Objeto da Classe RESTFUL recebido do fonte com a definição das API's
+@param [oRest], object, Objeto da Classe Rest do TLPP recebido do fonte com a definição das API's
+
+@return logical, lRet - Indica se foi processado com sucesso
+/*/ 
+User Function postMoviment(oClassRestFul as object, oRest as object) as character	
+	Local cJsonResponse			:= "" as character
+	Local cBody					:= "" as character
+	Local nStatusCode			:= 0 as numeric
+	Local jBody 				:= Nil as Json
+	
+	Private cMsg				:= "" as character
+	Private cDetailMsg			:= "" as character
+
+	cBody := oRest:getBodyRequest()
+	jBody := JsonObject():New()
+
+	If ( jBody:FromJson(cBody) == Nil )
+		If ( execProcesso(jBody) )
+			nStatusCode := 200
+			cJsonResponse := getJson(.T.)
+		Else
+			nStatusCode := 400
+			cJsonResponse := getJson(.F.)
+		EndIf
+	Else
+		cMsg := "Json inválido"
+		cJsonResponse := getJson(.F.)
+		nStatusCode := 400
+	EndIf
+	
+	oRest:setKeyHeaderResponse("Content-Type", "Application/Json;charset=utf-8")
+	oRest:setResponse(cJsonResponse)					
+	oRest:setStatusCode(nStatusCode)
+
+Return cJsonResponse
+
+/*
+	Rotina para realizar montagem e execução do processo de movimentação
+*/
+Static Function execProcesso(jBody) as logical
+	Local lRet 				:= .T. as logical
+	Local oAdapter			:= NIL as object
+	Local oHashMapHeader	:= NIL as object
+	Local oHashMapItem		:= NIL as object
+
+	Private aAutoCab		:= {} as array
+	Private aAutoItens		:= {} as array
+	
+	oHashMapHeader := getMapFieldsHeader()
+	oHashMapItem := getMapFieldsItem()
+
+	oAdapter := IntegracaoLabs.ProcessaMVCAPIProtheusData():new("SD3", 3)	
+	
+	oAdapter:addMapFieldsHeader(oHashMapHeader, "SD3")
+	oAdapter:addMapFieldsItem(oHashMapItem, "SD3")
+	
+	lRet := oAdapter:fromExecAuto(jBody)
+	
+	If ( lRet )
+		aAutoCab := oAdapter:getDataHeader()
+		aAutoItens := oAdapter:getDataaItems()
+	Else
+		cMsg := oAdapter:getErrorMessage()
+	EndIf
+
+	If ( lRet ) 
+		If ( Len(aAutoCab) > 0 .And. Len(aAutoItens) > 0)
+			lRet := execMovimentacoes(aAutoCab, aAutoItens)
+		Else
+			cMsg := "Não há dados a serem processados" 
+		EndIf
+	EndIf
+
+	oAdapter:destroy()
+
+Return lRet
+
+/*
+	Monta mapa de campos do cabeçalho em formato de objeto
+*/
+Static Function getMapFieldsHeader() as object
+	Local oHashFields	:= NIL as object
+
+	oHashFields := tHashMap():new()
+
+	oHashFields:Set("document", "D3_DOC")
+	oHashFields:Set("movementType", "D3_TM")
+	oHashFields:Set("costCenter", "D3_CC")
+
+Return oHashFields
+
+/*
+	Monta mapa de campos dos itens em formato de objeto
+*/
+Static Function getMapFieldsItem() as object
+	Local oHashFields	:= NIL as object
+
+	oHashFields := tHashMap():new()
+
+	oHashFields:Set("product", "D3_COD")
+	oHashFields:Set("unitOfMeasure", "D3_UM")
+	oHashFields:Set("quantity", "D3_QUANT")
+	oHashFields:Set("stockLocation", "D3_LOCAL")
+	oHashFields:Set("lot", "D3_LOTECTL")
+	oHashFields:Set("rootAddress", "D3_LOCALIZ")
+	oHashFields:Set("productionOrdem", "D3_OP")
+	oHashFields:Set("shift", "D3_ZZTURNO")
+
+Return oHashFields
+
+/*
+	Executa via execauto a inclusão da movimentação interna, com base 
+	nas informações enviadas via JSON
+*/
+Static Function execMovimentacoes(aAutoCab as array, aAutoItens as array) as logical
+	Local nItem			:= 0 as integer
+	Local cError    	:= "" as character
+	Local aMsgErro		:= {} as array
+	Local lGetError 	:= .T. as logical
+	Local lRet 			:= .T. as logical
+
+	Private lMsErroAuto		:= .F. as Logical
+	Private lAutoErrNoFile	:= .T. as Logical
+
+	MsExecAuto({|x,y,z| MATA241(x,y,z) }, aAutoCab, aAutoItens, 3)
+
+	If lMsErroAuto
+		lRet := .F.
+		aMsgErro := GetAutoGRLog()
+		
+		For nItem := 1 To Len( aMsgErro )
+			cDetailMsg += StrTran( StrTran( StrTran( aMsgErro[nItem], "<", "" ), "-", "" ), CRLF, " " )
+			If "AJUDA" $ cDetailMsg .And. lGetError
+				cError += SubStr(cDetailMsg,At(" ",cDetailMsg)+1)
+				lGetError := .F.
+			EndIf
+		Next
+		
+		cMsg := cError
+	EndIf
+
+Return lRet
+
+/*
+	Monta JSON de retorno
+*/
+Static Function getJson(lSuccess as logical) as json
+	Local jResponse	:= JsonObject():New() as json
+
+	cMsg := EncodeUTF8(cMsg)
+	cDetailMsg := EncodeUTF8(cDetailMsg)
+
+	If lSuccess
+		jResponse['messageSuccess'] := "Movimento cadastrado com sucesso!"
+	Else
+		jResponse['messageError'] := cMsg
+		jResponse['datailError'] := cDetailMsg
+	EndIf
+
+Return jResponse

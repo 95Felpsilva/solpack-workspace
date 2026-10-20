@@ -1,0 +1,20 @@
+#include "rwmake.ch"  
+
+//////////////////////////////////////////////////////////////////////////////////////
+//                              													//
+//  Retorna o Dígito Verificador conforme o Código de Barras ou Linha Digitável.	//
+//                              													//
+//////////////////////////////////////////////////////////////////////////////////////
+
+User Function PagDV()
+
+// Declaração das Variáveis.
+Local _cDV	:= ""
+
+If !Empty(SE2->E2_CODBAR)
+	_cDV 	:= Substr(SE2->E2_CODBAR,5,1)
+Else
+	_cDV	:= Substr(SE2->E2_IPTE,33,1)
+EndIf
+
+Return(_cDV)

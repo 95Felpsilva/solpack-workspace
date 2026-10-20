@@ -1,0 +1,581 @@
+#include 'totvs.ch'
+#include 'topconn.ch'
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+
+/*/{Protheus.doc} ApiFluxoDeCaixa
+Rest Fluxo de Caixa
+@type class
+@version 12.1.2410
+@author Felipe Silva
+@since 02/07/2025
+/*/
+class ApontamentoMOD2
+	public method new()
+	public method GetMaquinas() as character
+	public method GetOrdens() as character
+	public method GetTurnos() as character
+
+	@Get("/solpack/lista-maquinas")
+	public method ListaMaquinas() as logical
+
+	@Get("/solpack/lista-turnos-mod2")
+	public method ListaTurnos() as logical
+
+	@Get("/solpack/lista-ordens/:maquina")
+	public method ListaOrdens() as logical
+
+	@Post("/solpack/apontamento-mod2")
+	public method ApontaOrdem() as logical
+endclass
+
+/*/{Protheus.doc} ApontamentoMOD2::new
+MÃ©todo construtor da classe
+@type method
+@version 12.1.2410
+@author Felipe Silva
+@since 02/07/2025
+@return object, retorna a instancia da classe
+/*/
+method new() class ApontamentoMOD2
+return self
+
+/*/{Protheus.doc} ApiFluxoDeCaixa::fluxoDeCaixa
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 17/06/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method ListaMaquinas() as logical class ApontamentoMOD2
+	local cAlias	:= ::GetMaquinas()
+	local jResponse	:= JSonObject():New()
+	local jAux		:= JSonObject():New()
+    local aMaquinas := {}
+ 
+	while (cAlias)->(!Eof())
+		jAux			:= JSonObject():New()
+		jAux['value']	:= (cAlias)->H1_CODIGO
+		jAux['label']	:= AllTrim((cAlias)->H1_DESCRI)
+		jAux['setor']	:= AllTrim((cAlias)->H1_ZZSETOR)
+
+		aAdd(aMaquinas, jAux)
+
+		(cAlias)->(DbSkip())
+	enddo
+
+    jResponse["items"] 		:= aMaquinas
+    jResponse["hasNext"]	:= .f.
+
+	oRest:SetResponse(jResponse:ToJson())
+
+	(cAlias)->(DbCloseArea())
+return .t.
+
+method GetMaquinas() as character class ApontamentoMOD2
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT" + CRLF
+    cQuery += "    SH1.H1_CODIGO," + CRLF
+    cQuery += "    SH1.H1_DESCRI," + CRLF
+    cQuery += "    SH1.H1_ZZSETOR" + CRLF
+
+    cQuery += "FROM " + RetSqlTab("SH1") + "" + CRLF
+
+    cQuery += "WHERE" + CRLF
+    cQuery += "    1 = 1" + CRLF
+    cQuery += "    AND SH1.H1_MSBLQL <> '1'" + CRLF
+    cQuery += "    AND SH1.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "ORDER BY" + CRLF
+	cQuery += "		SH1.H1_CODIGO" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+method ListaOrdens() as logical class ApontamentoMOD2
+	local jParams 	:= oRest:getPathParamsRequest()
+	local cMaquina	:= jParams['maquina']
+	local cAlias	:= ::GetOrdens(cMaquina)
+	local jResponse	:= JSonObject():New()
+	local jAux		:= JSonObject():New()
+    local aOrdens := {}
+ 
+	while (cAlias)->(!Eof())
+		jAux							:= JSonObject():New()
+		jAux['op']						:= (cAlias)->OP
+		jAux['produto']					:= AllTrim((cAlias)->PRODUTO) + ' - ' + AllTrim((cAlias)->DESCRICAO)
+		jAux['totalOp']					:= (cAlias)->TOTAL_OP
+		jAux['saldo']					:= (cAlias)->SALDO_A_PRODUZIR
+
+		jAux['totalUnidade']			:= (cAlias)->TOTAL_OP_UNIDADE
+		jAux['saldoUnidade']			:= (cAlias)->SALDO_OP_UNIDADE
+		jAux['qtd_produzida_unidade']	:= (cAlias)->QTD_UNIDADE_PRODUZIDA
+		jAux['hora_fim']				:= AllTrim((cAlias)->HORA_FIM)
+
+		jAux['unidade']					:= (cAlias)->UNIDADE_MEDIDA
+		jAux['qtd_produzida']			:= (cAlias)->QTD_PRODUZIDA
+		jAux['tipo_apontamento']		:= (cAlias)->TIPO_APONTAMENTO
+		jAux['qtd_multiplo']			:= (cAlias)->QTD_MULTIPLO
+
+		aAdd(aOrdens, jAux)
+
+		(cAlias)->(DbSkip())
+	enddo
+
+    jResponse["items"] 		:= aOrdens
+    jResponse["hasNext"]	:= .f.
+
+	oRest:SetResponse(jResponse:ToJson())
+
+	(cAlias)->(DbCloseArea())
+return .t.
+
+method GetOrdens(cMaquina) as character class ApontamentoMOD2
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "		SC2.C2_NUM+SC2.C2_ITEM+SC2.C2_SEQUEN AS OP," + CRLF
+	cQuery += "		SB1.B1_COD AS PRODUTO," + CRLF
+	cQuery += "		SB1.B1_DESC AS DESCRICAO," + CRLF
+	cQuery += "		SC2.C2_QUANT AS TOTAL_OP," + CRLF
+	cQuery += "		COALESCE(SC2.C2_QUANT, 0) - COALESCE(SH6.H6_QTDPROD, 0) AS SALDO_A_PRODUZIR," + CRLF
+	cQuery += "		COALESCE(CASE" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				SB1.B1_TIPCONV = 'M' AND COALESCE(SB1.B1_QE, 1) > 0" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				(COALESCE(SC2.C2_QUANT, 0) / COALESCE(SB1.B1_QE, 1))" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				SB1.B1_TIPCONV = 'D' AND COALESCE(SB1.B1_QE, 1) > 0" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				(COALESCE(SC2.C2_QUANT, 0) * COALESCE(SB1.B1_QE, 1))" + CRLF
+	cQuery += "		END, 0) AS TOTAL_OP_UNIDADE," + CRLF
+	cQuery += "		COALESCE(CASE" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				SB1.B1_TIPCONV = 'M' AND COALESCE(SB1.B1_QE, 1) > 0" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				(COALESCE(SC2.C2_QUANT, 0) / COALESCE(SB1.B1_QE, 1)) - (COALESCE(SH6.H6_QTDPROD, 0) / COALESCE(SB1.B1_QE, 1))" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				SB1.B1_TIPCONV = 'D' AND COALESCE(SB1.B1_QE, 1) > 0" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				(COALESCE(SC2.C2_QUANT, 0) * COALESCE(SB1.B1_QE, 1)) - (COALESCE(SH6.H6_QTDPROD, 0) * COALESCE(SB1.B1_QE, 1))" + CRLF
+	cQuery += "		END, 0) AS SALDO_OP_UNIDADE," + CRLF
+	cQuery += "		SAH.AH_UNIMED + ' - ' + SAH.AH_DESCPO AS UNIDADE_MEDIDA," + CRLF
+	cQuery += "		SB1.B1_QE AS QTD_MULTIPLO," + CRLF
+	cQuery += "		CASE" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				SB1.B1_TIPO = 'PA' AND SB1.B1_COD LIKE '31%'" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				SH6.H6_QTDPROD" + CRLF
+	cQuery += "			ELSE" + CRLF
+	cQuery += "				1" + CRLF
+	cQuery += "		END AS QTD_PRODUZIDA," + CRLF
+	cQuery += "		CASE" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				SB1.B1_TIPO = 'PA' AND SB1.B1_COD LIKE '31%'" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				'INCOMPLETO'" + CRLF
+	cQuery += "			ELSE" + CRLF
+	cQuery += "				'COMPLETO'" + CRLF
+	cQuery += "		END AS TIPO_APONTAMENTO," + CRLF
+	cQuery += "		COALESCE(CASE" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				SB1.B1_TIPCONV = 'M' AND COALESCE(SB1.B1_QE, 1) > 0" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				COALESCE(SH6.H6_QTDPROD, 0) / COALESCE(SB1.B1_QE, 1)" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				SB1.B1_TIPCONV = 'D' AND COALESCE(SB1.B1_QE, 1) > 0" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				COALESCE(SH6.H6_QTDPROD, 0) * COALESCE(SB1.B1_QE, 1)" + CRLF
+	cQuery += "		END, 0) AS QTD_UNIDADE_PRODUZIDA," + CRLF
+	cQuery += "		COALESCE(SH6_FIM.HORA_FIM, '') AS HORA_FIM" + CRLF
+
+	cQuery += "FROM " + RetSqlTab("SH1") + "" + CRLF
+
+	cQuery += "INNER JOIN " + RetSqlTab("SC2") + "" + CRLF
+	cQuery += "		ON 1 = 1" + CRLF
+	cQuery += "		AND SC2.C2_FILIAL = SH1.H1_FILIAL" + CRLF
+	cQuery += "		AND SC2.C2_ZRECORI = SH1.H1_CODIGO" + CRLF
+	cQuery += "		AND SC2.C2_DATRF = ' '" + CRLF
+	cQuery += "		AND SC2.C2_TPOP = 'F'" + CRLF
+	cQuery += "		AND SC2.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "INNER JOIN " + RetSqlTab("SB1") + "" + CRLF
+	cQuery += "		ON 1 = 1" + CRLF
+	cQuery += "		AND SB1.B1_FILIAL = '" + FWxFilial("SB1") + "'" + CRLF
+	cQuery += "		AND SB1.B1_COD = SC2.C2_PRODUTO" + CRLF
+	cQuery += "		AND SB1.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "INNER JOIN " + RetSqlTab("SAH") + "" + CRLF
+	cQuery += "		ON 1 = 1" + CRLF
+	cQuery += "		AND SAH.AH_FILIAL = '" + FWxFilial("SAH") + "'" + CRLF
+	cQuery += "		AND SAH.AH_UNIMED = SB1.B1_UM" + CRLF
+	cQuery += "		AND SAH.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "OUTER APPLY (" + CRLF
+	cQuery += "	SELECT" + CRLF
+	cQuery += "		SUM(SH6.H6_QTDPROD) AS H6_QTDPROD" + CRLF
+	cQuery += "	FROM " + RetSqlTab("SH6") + "" + CRLF
+	cQuery += "	WHERE" + CRLF
+	cQuery += "		1 = 1" + CRLF
+	cQuery += "		AND SH6.H6_FILIAL = SC2.C2_FILIAL"
+	cQuery += "		AND SH6.H6_OP = SC2.C2_NUM+SC2.C2_ITEM+SC2.C2_SEQUEN" + CRLF
+	cQuery += "		AND SH6.H6_OPERAC = '01'" + CRLF
+	cQuery += "		AND SH6.D_E_L_E_T_ = ' '" + CRLF
+	cQuery += ") SH6" + CRLF
+
+	cQuery += "OUTER APPLY (" + CRLF
+	cQuery += "	SELECT TOP 1" + CRLF
+	cQuery += "		SH6.H6_HORAFIN AS HORA_FIM" + CRLF
+	cQuery += "	FROM " + RetSqlTab("SH6") + "" + CRLF
+	cQuery += "	WHERE" + CRLF
+	cQuery += "		1 = 1" + CRLF
+	cQuery += "		AND SH6.H6_FILIAL = SC2.C2_FILIAL"
+	cQuery += "		AND SH6.H6_OP = SC2.C2_NUM+SC2.C2_ITEM+SC2.C2_SEQUEN" + CRLF
+	cQuery += "		AND SH6.H6_OPERAC = '01'" + CRLF
+	cQuery += "		AND SH6.D_E_L_E_T_ = ' '" + CRLF
+	cQuery += "	ORDER BY" + CRLF
+	cQuery += "		SH6.R_E_C_N_O_ DESC" + CRLF
+	cQuery += ") SH6_FIM" + CRLF
+
+	cQuery += "WHERE" + CRLF
+	cQuery += "		1 = 1" + CRLF
+	cQuery += "		AND SH1.H1_CODIGO = '" + cMaquina + "'" + CRLF
+	cQuery += "		AND SH1.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "ORDER BY" + CRLF
+	cQuery += "		SC2.C2_NUM + SC2.C2_ITEM + SC2.C2_SEQUEN ASC" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+method ApontaOrdem() as logical class ApontamentoMOD2
+	local aArea 			:= GetArea()
+	local aAreaSH6 			:= SH6->(GetArea())
+	local aAreaSMO 			:= SMO->(GetArea())
+	local cJson 			:= oRest:getBodyRequest()
+	local jResponse			:= JSonObject():New()
+	local oJSon				:= nil
+	local cErro				:= ""
+	local cNumOP			:= ""
+	local cCodPro			:= ""
+	local cOperacao			:= ""
+	local cCodRecurso		:= ""
+	local cCodOperac		:= ""
+	local dIniData			:= nil
+	local cIniHora			:= ""
+	local dFimData			:= nil
+	local cFimHora			:= ""
+	local nQtdPro			:= 0
+	local nI				:= 0
+	local aCabec			:= {}
+	local aLog				:= {}
+	local nQtdMul			:= 0
+	local nX				:= 0
+	local lResto			:= .f.
+	local cSeqIde			:= ""
+	local nAuxTen			:= 0
+
+	private lMsErroAuto		:= .f.
+	private cImpAPI			:= ""
+	private lIsPAAPI		:= .t.
+	private nQtdReAPI		:= 0
+	private lMsHelpAuto     := .f.
+	private lAutoErrNoFile	:= .t.
+	private lSaldo			:= .t.
+	//private lApp			:= .t.
+	private CODIMPR 		:= ""
+	private cNomeUser 		:= ""
+
+	oJSon := JSonObject():New()
+	cErro := oJSon:FromJson(cJSON)
+
+	if !Empty(cErro)
+		jResponse["status"]		:= 400
+		jResponse["menssage"]	:= "Erro na conversão do JSon: " + cErro
+    	jResponse["result"]		:= .f.
+	else
+		cImpAPI		:= oJSon['ordem'][1]:GetJSonObject('IMPRESSORA')
+		cNumOP   	:= oJSon['ordem'][1]:GetJSonObject('ORDEM_PRODUCAO')
+		cCodPro		:= oJSon['ordem'][1]:GetJSonObject('COD_PRODUTO')
+		cOperacao	:= "01"
+		cCodRecurso	:= oJSon['ordem'][1]:GetJSonObject('RECURSO')
+		cCodOperac 	:= oJSon['ordem'][1]:GetJSonObject('OPERADOR')
+		dIniData	:= CToD(oJSon['ordem'][1]:GetJSonObject('DATA_INICIAL'))
+		cIniHora	:= GTFormatHour(oJSon['ordem'][1]:GetJSonObject('HORA_INICIAL'), "99:99")
+		cFimHora	:= GTFormatHour(oJSon['ordem'][1]:GetJSonObject('HORA_FINAL'), "99:99")
+		//hHrTotal := oJSon:GetJSonObject('tempo_total')
+		dFimData	:= CToD(oJSon['ordem'][1]:GetJSonObject('DATA_FINAL'))
+		nQtdPro  := oJSon['ordem'][1]:GetJSonObject('QTD_PRODUZIDA')
+		nQtdMul  := oJSon['ordem'][1]:GetJSonObject('QTD_MULTIPLO')
+
+		if !Empty(oJSon['ordem'][1]:GetJSonObject('QTD_PERDA'))
+			nQtdPer  := Val(StrTran(oJSon['ordem'][1]:GetJSonObject('QTD_PERDA'), ",", "."))
+		else
+			nQtdPer  := 0
+		endif
+
+		if nQtdMul > 0 .and. nQtdMul < 1
+			lResto := .t.
+		endif
+
+		for nX := 1 to nQtdMul
+			aAreaSH6	:= SH6->(GetArea())
+			aAreaSMO	:= SMO->(GetArea())
+			aCabec 		:= {}
+			cSeqIde		:= ""
+			nAuxTen		:= 0
+
+			while Empty(cSeqIde) .and. nAuxTen <= 10
+				nAuxTen++
+
+				cSeqIde := AllTrim(GetNextIdent())
+			enddo
+
+			DbSelectArea("SH6")
+			DbSetOrder(1)       // ORDEM 1: H6_FILIAL+H6_OP+H6_PRODUTO+H6_OPERAC+H6_SEQ+DTOS(H6_DATAINI)+H6_HORAINI+DTOS(H6_DATAFIN)+H6_HORAFIN
+			DbGotop()
+
+			aAdd(aCabec, {"H6_FILIAL", 		FWxFilial('SH6'), 		nil})
+			aAdd(aCabec, {"H6_OP", 			cNumOP, 				nil})
+			aAdd(aCabec, {"H6_IDENT", 		cSeqIde, 				nil})
+			aAdd(aCabec, {"H6_OPERAC", 		cOperacao,				nil})
+			aAdd(aCabec, {"H6_RECURSO", 	cCodRecurso,			nil})
+			aAdd(aCabec, {"H6_PRODUTO", 	cCodPro, 				nil})
+			aAdd(aCabec, {"H6_OPERADO", 	cCodOperac,				nil})
+			aAdd(aCabec, {"H6_DTAPONT", 	dDataBase, 				nil})
+			aAdd(aCabec, {"H6_DTPROD", 		dDataBase, 				nil})
+			aAdd(aCabec, {"H6_DATAINI", 	dIniData, 				nil})
+			aAdd(aCabec, {"H6_HORAINI", 	cIniHora, 				nil})
+			aAdd(aCabec, {"H6_DATAFIN", 	dFimData, 				nil})
+			aAdd(aCabec, {"H6_HORAFIN", 	cFimHora, 				nil})
+			//aAdd(aCabec, {"H6_TEMPO",		hHrTotal, 				nil})
+			//aAdd(aCabec, {"H6_QTDPROD", 	nQtdPro, 				nil})
+			aAdd(aCabec, {"H6_QTDPROD", 	(nQtdPro/nQtdMul),		nil})
+			aAdd(aCabec, {"H6_ZZMULTP", 	1,						nil})
+			//aAdd(aCabec, {"H6_QTDPERD", 	nQtdPer, 				nil})
+			aAdd(aCabec, {"H6_OBSERVA", 	"APP PRODUCAO POUI",	nil})
+			aAdd(aCabec, {"H6_XUSER", 		cCodOperac,				nil})
+			aAdd(aCabec, {"H6_XDAPON", 		dDataBase,				nil})
+			aAdd(aCabec, {"H6_XHAPON", 		Time(),					nil})
+
+			//lSaldo := u_CONSALDO()
+
+			//if lSaldo
+			//Begin Transaction
+				lMsErroAuto	:= .f.
+				//lApp		:= .t.
+
+				MsExecAuto({|x, y| MATA681(x, y)}, aCabec, 3)
+
+				if lMsErroAuto
+					DisarmTransaction()
+					cErro := ""
+					aLog  := GetAutoGRLog()
+
+					for nI := 1 To Len(aLog)
+						if !Empty(cErro)
+							cErro += CRLF
+						endif
+
+						cErro += aLog[nI]
+					next nI
+
+					if !lSaldo
+						cErro += CRLF
+						cErro += "Saldo insuficiente."
+					endif
+
+					jResponse["status"]		:= 400
+					jResponse["menssage"]	:= "Erro na ExecAuto: " + cErro
+					jResponse["result"]		:= .f.
+				else
+					CODIMPR 	:= cImpAPI
+    				cNomeUser	:= cCodOperac
+
+					u_ImpEtq(.f.)
+
+					jResponse["status"]		:= 200
+					jResponse["menssage"]	:= "Apontamento feito com sucesso! Identificador: '" + SH6->H6_OP + SH6->H6_IDENT + "'"
+					jResponse["result"]		:= .t.
+				endif
+			//else
+			//	jResponse["status"]		:= 400
+			//	jResponse["menssage"]	:= "Ordem de Produção não contem saldo!"
+			//	jResponse["result"]		:= .f.
+			//endif
+			//End Transaction
+
+			Restarea(aAreaSH6)
+			Restarea(aAreaSMO)
+		next nX
+	endif
+
+	if lResto
+		aAreaSH6	:= SH6->(GetArea())
+		aAreaSMO	:= SMO->(GetArea())
+		aCabec 		:= {}
+
+		DbSelectArea("SH6")
+		DbSetOrder(1)       // ORDEM 1: H6_FILIAL+H6_OP+H6_PRODUTO+H6_OPERAC+H6_SEQ+DTOS(H6_DATAINI)+H6_HORAINI+DTOS(H6_DATAFIN)+H6_HORAFIN
+		DbGotop()
+
+		aAdd(aCabec, {"H6_FILIAL", 		FWxFilial('SH6'), 		nil})
+		aAdd(aCabec, {"H6_OP", 			cNumOP, 				nil})
+		aAdd(aCabec, {"H6_OPERAC", 		cOperacao,				nil})
+		aAdd(aCabec, {"H6_RECURSO", 	cCodRecurso,			nil})
+		aAdd(aCabec, {"H6_PRODUTO", 	cCodPro, 				nil})
+		aAdd(aCabec, {"H6_OPERADO", 	cCodOperac,				nil})
+		aAdd(aCabec, {"H6_DTAPONT", 	dDataBase, 				nil})
+		aAdd(aCabec, {"H6_DTPROD", 		dDataBase, 				nil})
+		aAdd(aCabec, {"H6_DATAINI", 	dIniData, 				nil})
+		aAdd(aCabec, {"H6_HORAINI", 	cIniHora, 				nil})
+		aAdd(aCabec, {"H6_DATAFIN", 	dFimData, 				nil})
+		aAdd(aCabec, {"H6_HORAFIN", 	cFimHora, 				nil})
+		//aAdd(aCabec, {"H6_TEMPO",		hHrTotal, 				nil})
+		//aAdd(aCabec, {"H6_QTDPROD", 	nQtdPro, 				nil})
+		aAdd(aCabec, {"H6_QTDPROD", 	nQtdPro,				nil})
+		aAdd(aCabec, {"H6_ZZMULTP", 	nQtdMul,				nil})
+		//aAdd(aCabec, {"H6_QTDPERD", 	nQtdPer, 				nil})
+		aAdd(aCabec, {"H6_OBSERVA", 	"APP PRODUCAO POUI",	nil})
+		aAdd(aCabec, {"H6_XUSER", 		cCodOperac,				nil})
+		aAdd(aCabec, {"H6_XDAPON", 		dDataBase,				nil})
+		aAdd(aCabec, {"H6_XHAPON", 		Time(),					nil})
+
+		//lSaldo := u_CONSALDO()
+
+		//if lSaldo
+		Begin Transaction
+			lMsErroAuto	:= .f.
+
+			MsExecAuto({|x, y| MATA681(x, y)}, aCabec, 3)
+
+			if lMsErroAuto
+				DisarmTransaction()
+				cErro := ""
+				aLog  := GetAutoGRLog()
+
+				for nI := 1 To Len(aLog)
+					if !Empty(cErro)
+						cErro += CRLF
+					endif
+
+					cErro += aLog[nI]
+				next nI
+
+				if !lSaldo
+					cErro += CRLF
+					cErro += "Saldo insuficiente."
+				endif
+
+				jResponse["status"]		:= 400
+				jResponse["menssage"]	:= "Erro na ExecAuto: " + cErro
+				jResponse["result"]		:= .f.
+			else
+				jResponse["status"]		:= 200
+				jResponse["menssage"]	:= "Apontamento feito com sucesso! Identificador: '" + SH6->H6_OP + SH6->H6_IDENT + "'"
+				jResponse["result"]		:= .t.
+			endif
+		//else
+		//	jResponse["status"]		:= 400
+		//	jResponse["menssage"]	:= "Ordem de Produção não contem saldo!"
+		//	jResponse["result"]		:= .f.
+		//endif
+		End Transaction
+
+		Restarea(aAreaSH6)
+		Restarea(aAreaSMO)
+	endif
+
+	oRest:SetResponse(jResponse:ToJson())
+
+	Restarea(aArea)
+	Restarea(aAreaSH6)
+	Restarea(aAreaSMO)
+return .t.
+
+method ListaTurnos() as logical class ApontamentoMOD2
+	local jResponse	:= JSonObject():New()
+	local jAux	    := JSonObject():New()
+	local cAlias    := ::GetTurnos()
+    local aTurnos := {}
+
+    while (cAlias)->(!Eof())
+        jAux            := JSonObject():New()
+	    jAux['value']   := AllTrim((cAlias)->ZZ7_ID)
+	    jAux['label']   := AllTrim((cAlias)->ZZ7_DESC)
+
+        aAdd(aTurnos, jAux)
+
+        (cAlias)->(DbSkip())
+    enddo
+
+    jResponse["items"] 		:= aTurnos
+    jResponse["hasNext"]	:= .f.
+
+	oRest:SetResponse(jResponse:ToJson())
+
+    (cAlias)->(DbCloseArea())
+return .t.
+
+method GetTurnos() as character class ApontamentoMOD2
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT " + CRLF
+    cQuery += "    ZZ7_ID," + CRLF
+    cQuery += "    RTRIM(LTRIM(ZZ7_DESC)) + ' - ' + '(' + RTRIM(LTRIM(ZZ7_HORAIN)) + ' - ' + RTRIM(LTRIM(ZZ7_HORAFI)) + ')' AS ZZ7_DESC" + CRLF
+
+    cQuery += "FROM " + RetSqlTab("ZZ7") + "" + CRLF
+
+    cQuery += "WHERE" + CRLF
+    cQuery += "    1 = 1" + CRLF
+    cQuery += "    AND ZZ7.ZZ7_FILIAL = '" + FWxFilial("ZZ7") + "'" + CRLF
+    cQuery += "    AND ZZ7.ZZ7_MSBLQL <> '1'" + CRLF
+    cQuery += "    AND ZZ7.D_E_L_E_T_ = ' '" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+static function GetNextIdent()
+	local cRet 		:= ""
+	local cQuery 	:= ""
+	local cAlias 	:= ""
+
+	cQuery += "WITH Ultimo AS (" + CRLF
+	cQuery += "	SELECT top 1 '9BNQKO' AS ULTIMO_IDENT" + CRLF
+	cQuery += "	FROM " + RetSqlName("SH6") + " SH6" + CRLF
+	cQuery += "	WHERE SH6.H6_FILIAL = '" + FWxFilial("SH6") + "'" + CRLF
+	cQuery += "	AND SH6.D_E_L_E_T_ = ' '" + CRLF
+	cQuery += ")," + CRLF
+	cQuery += "Proximo AS (" + CRLF
+	cQuery += "	SELECT " + CRLF
+	cQuery += "		LEFT(ULTIMO_IDENT, LEN(ULTIMO_IDENT) - 1) +" + CRLF
+	cQuery += "		CHAR(ASCII(RIGHT(ULTIMO_IDENT, 1)) + 1) AS NOVO_IDENT" + CRLF
+	cQuery += "	FROM Ultimo" + CRLF
+	cQuery += ")" + CRLF
+	cQuery += "SELECT P.NOVO_IDENT" + CRLF
+	cQuery += "FROM Proximo P" + CRLF
+	cQuery += "WHERE NOT EXISTS (" + CRLF
+	cQuery += "	SELECT 1" + CRLF
+	cQuery += "	FROM " + RetSqlName("SH6") + " S" + CRLF
+	cQuery += "	WHERE S.H6_IDENT = P.NOVO_IDENT" + CRLF
+	cQuery += "	AND S.H6_FILIAL = '" + FWxFilial("SH6") + "'" + CRLF
+	cQuery += "	AND S.D_E_L_E_T_ = ' '" + CRLF
+	cQuery += ");" + CRLF
+
+	TcQuery cQuery new alias (cAlias := GetNextAlias())
+
+	if (cAlias)->(!Eof())
+		cRet := (cAlias)->NOVO_IDENT
+	endif
+return cRet

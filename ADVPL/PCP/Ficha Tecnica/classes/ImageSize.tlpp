@@ -1,0 +1,117 @@
+#include 'totvs.ch'
+
+class ImageSize
+
+	static method run()
+endclass
+
+method run(cPFile) class ImageSize
+	local oWebEngine   := nil
+	local cTempPath    := "\imagesize\"
+	//Local cArqFim		:= cTempPath + "imagesize.html"
+	local aFiles       := {}
+	local nFile        := 0
+	local cFilesError  := ""
+	local cFile2Web    := ""
+	local cFile2WebHTML:= ""
+	default cPFile     := "E:\totvs\protheus\homologacao\protheus12_data\relftimp20250220103804_70%.jpg"
+	Private oSize      := FwDefSize() :New()
+	private oDLG       := nil
+	private jImageSize := JsonObject():New()
+	private cFile      := cPFile
+	private cNameFile  := lower(atail(strtokarr(cFile,"\")))
+
+	jImageSize["status"] := .f.
+	jImageSize["message"] := ""
+	jImageSize["widthPx"] := 0
+	jImageSize["heightPx"] := 0
+
+	FileIo():makeFolder(cTempPath)
+
+	aAdd(aFiles,"imagesize.html")
+	aAdd(aFiles,"imagesize.js")
+	aAdd(aFiles,"twebchannel.js")
+
+	for nFile := 1 to len(aFiles)
+		cFileWeb :=  aFiles[nFile]
+
+		if file(cTempPath + cFileWeb)
+			fErase(cTempPath + cFileWeb)
+		endif
+
+		if !resource2File(cFileWeb,cTempPath+cFileWeb)
+			cFilesError += cFileWeb + CRLF
+		endif
+
+		cFile2Web := CpyF2Web(cTempPath+cFileWeb, .T., .F., .F., .F.) 
+
+		if ".html" $ cFileWeb
+			cFile2WebHTML := cFile2Web
+		endif
+	next i
+
+	if !empty(cFilesError)
+		jImageSize["message"] := "Erro ao extrair o(s) arquivo(s) " + cFilesError + " do RPO, para a pasta " + cTempPath
+		return jImageSize
+	endif
+
+    if !FileIO():copyFiles({cFile}/*aFiles*/,cTempPath/*cPathMove*/,.f./*lDeleteFile*/)
+		jImageSize["message"] := "Erro ao copiar a imagem " + cFile + " para o caminho " + cTempPath
+		return jImageSize
+    endif
+
+	CpyF2Web(cTempPath+cNameFile, .T., .F., .F., .F.) 
+
+	DEFINE DIALOG oDlg TITLE "Cálculo imagesize JS" FROM oSize:aWindSize[1],oSize:aWindSize[2] to oSize:aWindSize[3],oSize:aWindSize[4] PIXEL
+
+	// Prepara o conector WebSocket
+	oWebChannel := TWebChannel():New()
+	oWebChannel:connect()
+
+	// Cria componente
+	oWebEngine := TWebEngine():New(oDlg, 0, 0, 100, 100,, oWebChannel:nPort)
+	oWebEngine:bLoadFinished := {|oWebEngine,url| LoadFinished(oWebEngine,url) }
+	oWebChannel:bJsToAdvpl := {|self,key,value| jsToAdvpl(self,key,value) }
+	oWebChannel:connect()
+	oWebEngine:navigate(cFile2WebHTML)
+	oWebEngine:Align := CONTROL_ALIGN_ALLCLIENT
+
+	ACTIVATE DIALOG oDlg CENTERED
+Return jImageSize
+
+// Blocos de codigo recebidos via JavaScript
+static function jsToAdvpl(self,key,value)
+	conout("",;
+		"jsToAdvpl->key: " + key,;
+		"jsToAdvpl->value: " + value)
+
+	if key == "error"
+		alert('Erro ao calcular tamanho da imagem' + value)
+		jImageSize:fromJson(value)
+		oDLG:end()
+	elseif key == "imagesize"
+		jImageSize:fromJson(value)
+		oDLG:end()
+	endif
+Return
+
+static function getOS()
+	local stringOS := Upper(GetRmtInfo()[2])
+
+	if GetRemoteType() == 0 .or. GetRemoteType() == 1
+		return "WINDOWS"
+	elseif GetRemoteType() == 2
+		return "UNIX" // Linux ou MacOS
+	elseif GetRemoteType() == 5
+		return "HTML" // Smartclient HTML
+	elseif ("ANDROID" $ stringOS)
+		return "ANDROID"
+	elseif ("IPHONEOS" $ stringOS)
+		return "IPHONEOS"
+	endif
+return ""
+
+static function LoadFinished(oWebEngine,url)
+	oWebEngine:runjavascript('imagesize("./' + cNameFile + '")')
+return
+

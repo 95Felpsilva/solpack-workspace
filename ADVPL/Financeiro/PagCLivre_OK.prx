@@ -1,0 +1,20 @@
+#include "rwmake.ch"  
+
+//////////////////////////////////////////////////////////////////////////////
+//                              											//
+//  Retorna o Campo Livre conforme o Código de Barras ou Linha Digitável.  	//
+//                              											//
+//////////////////////////////////////////////////////////////////////////////
+
+User Function PagCLivre()
+
+// Declaração das Variáveis.
+Local _cLivre	:= ""
+
+If !Empty(SE2->E2_CODBAR)
+	_cLivre := Substr(SE2->E2_CODBAR,20,25)
+Else
+	_cLivre	:= Substr(SE2->E2_IPTE,5,5)+Substr(SE2->E2_IPTE,11,10)+Substr(SE2->E2_IPTE,22,10)
+EndIf
+
+Return(_cLivre)

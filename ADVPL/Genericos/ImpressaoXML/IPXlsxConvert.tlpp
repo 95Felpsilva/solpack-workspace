@@ -1,0 +1,24 @@
+#include 'tlpp-core.th'
+
+Interface IXlsConvert
+    method convert(xValue,cField,cAlias,cSheetName)
+endInterface
+
+class IPXlsxConvert implements IXlsConvert
+
+    public method new()
+    public method convert()
+    static method Default()
+endclass
+
+method new() class IPXlsxConvert
+return self
+
+method Default() class IPXlsxConvert
+    local oConvert := IPXlsxConvert():new()
+return oConvert
+ 
+method convert(xValue,cField,cAlias,cSheetName) class IPXlsxConvert
+return xValue
+
+

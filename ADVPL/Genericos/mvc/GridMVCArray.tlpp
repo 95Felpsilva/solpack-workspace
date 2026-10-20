@@ -1,0 +1,71 @@
+#include 'totvs.ch'
+#include 'TopConn.ch'
+#include "fwmvcdef.ch"
+
+/*/{Protheus.doc} GridMVCArray
+Classe responsável por abrir um MVC só com grid através de um Array
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+class GridMVCArray from GridMVCDef
+	data aLines	 as array
+
+	public method new() constructor
+	public method getArray()
+	public method setArray()
+	public method loadGrid()
+	private method ArrayStruct()
+endclass
+/*/{Protheus.doc} GridMVCArray::new
+Método construtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+method new(cID) class GridMVCArray
+	_Super:new(cID,"GRIDMVC","MODEL_GRID","VIEW_GRID",{|oModel|::loadGrid(oModel)})
+	::aLines	   := {}
+return
+/*/{Protheus.doc} GridMVCArray::setArray
+Seta a Array da Array que deverá ser utilizado para montar o grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param aArray, array, Array que será utilizado para montar o grid, com a mesma esturtura do ACOLS utilizado no msnewgetdados()
+/*/
+method setArray(aArray) class GridMVCArray
+	default aArray := {}
+
+	::aLines := aArray
+return
+/*/{Protheus.doc} GridMVCArray::loadGrid
+Carrega o array com os dados do grid para o MVC
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param oModel, object, Model com a definição do grid
+@return array, Array com os dados do grid
+/*/
+method loadGrid(oModel) class GridMVCArray
+return ::ArrayStruct()
+/*/{Protheus.doc} GridMVCArray::ArrayStruct
+Monta a estrutura de campos do Array enviado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+/*/
+method ArrayStruct() class GridMVCArray
+	local nLine      := 0
+	local nRecno     := 0
+    local aNewLines   := {}
+
+	for nLine := 1 to len(::aLines)
+        aAdd(aNewLines,{nRecno,aClone(::aLines[nLine])})
+	next nLine
+return aNewLines

@@ -1,0 +1,14 @@
+#define ALIAS_FORM0 			"ZF1"
+#define ALIAS_GRID0 			"ZF2"
+#define ALIAS_GRID1 			"ZF3"
+#define PREFIXO_ALIAS_FORM0		Right(ALIAS_FORM0,03)
+#define PREFIXO_ALIAS_GRID0		Right(ALIAS_GRID0,03)
+#define PREFIXO_ALIAS_GRID1		Right(ALIAS_GRID1,03)
+#define NOME_EMPRESA            "SOLPACK"
+#define OPERACAO_INCLUSAO       3
+#define OPERACAO_ALTERACAO      4
+#define OPERACAO_EXCLUSAO       5
+#define OPERACAO_COPIA          6
+#define MOVIMENTO_ENTRADA       "1"
+#define MOVIMENTO_SAIDA         "2"
+#define MOVIMENTO_VENCIMENTO    "3"

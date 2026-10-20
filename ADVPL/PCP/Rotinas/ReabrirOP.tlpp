@@ -1,0 +1,22 @@
+#include 'totvs.ch'
+
+/*/{Protheus.doc} ReabrirOP
+Rotina responsável por reabrir a OP, limpando a data de entrega [C2_DATPRF]
+@author Felipe Silva.
+@since 09/09/2026
+@version undefined
+
+@type function
+/*/
+user function ReabrirOP()
+    local cUsrAut := SuperGetMv("MV_ZZUSROP",, "000000,000001")
+    local cCodUsr := RetCodUsr()
+
+    if cCodUsr $ cUsrAut
+        RecLock("SC2", .f.)
+            SC2->C2_DATRF := CToD("")
+        SC2->(MsUnlock())
+    else
+        FWAlertWarning("Usuario nao autorizado. Verificar parametro [MV_ZZUSROP]", "Usuario nao Autorizado")
+    endif
+return

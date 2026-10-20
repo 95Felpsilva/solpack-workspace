@@ -1,0 +1,415 @@
+#include 'totvs.ch'
+#Include 'FWMVCDEF.CH'
+/*/{Protheus.doc} StructModel
+Classe com as definições para criação de um novo campo no MVC
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+/*/
+class StructModel
+	data cTitle
+	data cTooltip
+	data cIdField
+	data cType
+	data nSize
+	data nDecimal
+	data bValid
+	data bWhen
+	data aValues
+	data lObrigat
+	data bInit
+	data lKey
+	data lNoUpd
+	data lVirtual
+	data cValid
+
+	public method new() CONSTRUCTOR
+    public method addField()
+	public method getTitle()
+	public method getTooltip()
+	public method getIdField()
+	public method getType()
+	public method getSize()
+	public method getDecimal()
+	public method getValid()
+	public method getWhen()
+	public method getValues()
+	public method isObrigat()
+	public method getInit()
+	public method isKey()
+	public method isNoUpd()
+	public method isVirtual()
+
+	public method setTitle()
+	public method setTooltip()
+	public method setIdField()
+	public method setType()
+	public method setSize()
+	public method setDecimal()
+	public method setValid()
+	public method setWhen()
+	public method setValues()
+	public method setObrigat()
+	public method setInit()
+	public method setKey()
+	public method setNoUpd()
+	public method setVirtual()
+endclass
+/*/{Protheus.doc} StructModel::new
+Método construtor da classse
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+/*/
+method new() class StructModel
+	::setTitle()
+	::setTooltip()
+	::setIdField()
+	::setType()
+	::setSize()
+	::setDecimal()
+	::setValid()
+	::setWhen()
+	::setValues()
+	::setObrigat()
+	::setInit()
+	::setKey()
+	::setNoUpd()
+	::setVirtual()
+return
+/*/{Protheus.doc} StructModel::addField
+Adiciona os campos no model recebido por parametro
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param oStruct, object, Objeto FWFORMMODELSTRUCT que terá os campos adicionados
+/*/
+method addField(oStruct) class StructModel
+    oStruct:AddField(::getTitle(), ::getTooltip(), ::getIdField(), ::getType(), ::getSize(), ::getDecimal(), ::getValid(), ::getWhen(), ::getValues(), ::isObrigat(), ::getInit(), ::isKey(), ::isNoUpd(), ::isVirtual(), ::cValid)
+return
+/*/{Protheus.doc} StructModel::getTitle
+Retorna o titulo do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Retorna o titulo do campo
+/*/
+method getTitle() class StructModel
+return ::cTitle
+/*/{Protheus.doc} StructModel::getTooltip
+Retorna o tooltip do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Retorna o tooltip do campo
+/*/
+method getTooltip() class StructModel
+return ::cTooltip
+/*/{Protheus.doc} StructModel::getIdField
+Retorna o ID do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Retorna o ID do campo
+/*/
+method getIdField() class StructModel
+return ::cIdField
+/*/{Protheus.doc} StructModel::getType
+Retorna o Tipo do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Retorna o Tipo do campo
+/*/
+method getType() class StructModel
+return ::cType
+/*/{Protheus.doc} StructModel::getSize
+Retorna o tamanho do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return numeric, Retorna o tamanho do campo
+/*/
+method getSize() class StructModel
+return ::nSize
+/*/{Protheus.doc} StructModel::getDecimal
+Retorna a quantidade de decimais do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return numeric, Retorna a quantidade de decimais do campo
+/*/
+method getDecimal() class StructModel
+return ::nDecimal
+/*/{Protheus.doc} StructModel::getValid
+Retorna o bloco de código com a validação do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return codeblock, Retorna o bloco de código com a validação do campo
+/*/
+method getValid() class StructModel
+return ::bValid
+/*/{Protheus.doc} StructModel::getWhen
+Retorna o bloco de código com o modo de edição do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return codeblock, Retorna o bloco de código com o modo de edição do campo
+/*/
+method getWhen() class StructModel
+return ::bWhen
+/*/{Protheus.doc} StructModel::getValues
+Retorna array com os valores do combobox
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return array, Retorna array com os valores do combobox
+/*/
+method getValues() class StructModel
+return ::aValues
+/*/{Protheus.doc} StructModel::isObrigat
+Indica se o campo tem seu preenchimento obrigatório
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return logical, Indica se o campo tem seu preenchimento obrigatório
+/*/
+method isObrigat() class StructModel
+return ::lObrigat
+/*/{Protheus.doc} StructModel::getInit
+Retorna o titulo do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return codeblock, Retorna o titulo do campo
+/*/
+method getInit() class StructModel
+return ::bInit
+/*/{Protheus.doc} StructModel::isKey
+Indica se trata-se de um campo chave
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return logical, Indica se trata-se de um campo chave
+/*/
+method isKey() class StructModel
+return ::lKey
+/*/{Protheus.doc} StructModel::isNoUpd
+Indica se o campo não pode receber valor em uma operação de update
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return logical, Indica se o campo não pode receber valor em uma operação de update
+/*/
+method isNoUpd() class StructModel
+return ::lNoUpd
+/*/{Protheus.doc} StructModel::isVirtual
+Indica se o campo é virtual
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return logical, Indica se o campo é virtual
+/*/
+method isVirtual() class StructModel
+return ::lVirtual
+/*/{Protheus.doc} StructModel::setTitle
+Atribui o título do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cTitle, character, Titulo do campo
+/*/
+method setTitle(cTitle) class StructModel
+    default cTitile := ""
+    ::cTitle := cTitle
+return
+/*/{Protheus.doc} StructModel::setTooltip
+Atribui o tooltip do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cTooltip, character, tooltip do campo
+/*/
+method setTooltip(cTooltip) class StructModel
+	default cTooltip := ""
+	::cTooltip := cTooltip
+return
+/*/{Protheus.doc} StructModel::setIdField
+Atribui o ID do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cIdField, character, ID do campo
+/*/
+method setIdField(cIdField) class StructModel
+    default cIdField := ""
+	::cIdField := cIdField
+return
+/*/{Protheus.doc} StructModel::setType
+Atribui o tipo do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cType, character, Tipo do campo
+/*/
+method setType(cType) class StructModel
+    default cType := ""
+	::cType := cType
+return
+/*/{Protheus.doc} StructModel::setTitle
+Atribui o tamanho do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param nSize, numeric, tamanho do campo
+/*/
+method setSize(nSize) class StructModel
+    default nSize := 0
+	::nSize := nSize
+return
+/*/{Protheus.doc} StructModel::setTitle
+Atribui o decimal do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param nDecimal, numeric, decimal do campo
+/*/
+method setDecimal(nDecimal) class StructModel
+    default nDecimal := 0
+	::nDecimal := nDecimal
+return
+/*/{Protheus.doc} StructModel::setValid
+Atribui a validação de usuário do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cValid, character, Validação de usuário do campo
+/*/
+method setValid(cValid) class StructModel
+	local bValid := nil
+	default cValid := ".t."
+
+	bValid := FWBuildFeature( STRUCT_FEATURE_VALID	, cValid	)
+
+	::bValid := bValid
+	::cValid := cValid
+return
+/*/{Protheus.doc} StructModel::setWhen
+String de validação when do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cWhen, character, String de validação when do campo
+/*/
+method setWhen(cWhen) class StructModel
+	local bWhen := nil
+	default cWhen := ".t."
+
+	bWhen := FWBuildFeature( STRUCT_FEATURE_WHEN	, cWhen	)
+
+	::bWhen := bWhen
+return
+/*/{Protheus.doc} StructModel::setValues
+Lista de valores permitido do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param aValues, array, Lista de valores permitido do campo
+/*/
+method setValues(aValues) class StructModel
+    default aValues := {}
+	::aValues := aValues
+return
+/*/{Protheus.doc} StructModel::setObrigat
+Indica se o campo tem preenchimento obrigatório
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param lObrigat, logical, Indica se o campo tem preenchimento obrigatório
+/*/
+method setObrigat(lObrigat) class StructModel
+    default lObrigat := .f.
+	::lObrigat := lObrigat
+return
+/*/{Protheus.doc} StructModel::setInit
+String com o inicializador padrão do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cInit, character, String com o inicializador padrão do campo
+/*/
+method setInit(cInit) class StructModel
+	default cIini := ""
+
+	if !empty(cInit)
+		::bInit := FWBuildFeature( STRUCT_FEATURE_INIPAD  	, cInit	)
+	else
+		::bInit := nil
+	endif
+return
+/*/{Protheus.doc} StructModel::setKey
+Indica se trata-se de um campo chave
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param lKey, logical, Indica se trata-se de um campo chave
+/*/
+method setKey(lKey) class StructModel
+    default lKey := .f.
+	::lKey := lKey
+return
+/*/{Protheus.doc} StructModel::setNoUpd
+Indica se o campo não pode receber valor em uma operação de update
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param lNoUpd, logical, Indica se o campo não pode receber valor em uma operação de update
+/*/
+method setNoUpd(lNoUpd) class StructModel
+    default lNoUpd := .f.
+	::lNoUpd := lNoUpd
+return
+/*/{Protheus.doc} StructModel::setVirtual
+Atribui se o campo será virtual
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param lVirtual, logical, Indica se o campo é virtual
+/*/
+method setVirtual(lVirtual) class StructModel
+    default lVirtual := .t.
+	::lVirtual := lVirtual
+return
+

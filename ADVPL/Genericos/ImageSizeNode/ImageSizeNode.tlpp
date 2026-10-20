@@ -1,0 +1,45 @@
+#include 'totvs.ch'
+/*/{Protheus.doc} ImageSizeNode
+Calcula o tamanho da imagem em pixel através de comandos no Node.js
+@type function
+@version 12.1.2410
+@author Tiago Faria
+@since 28/07/2025
+@param cFullPath, character, Caminho completo da imagem
+@return json, retorna objeto json com o tamanho da imagem exemplo: {success: true, message: "OK", width:100, height:100}
+/*/
+user function ImageSizeNode(cFullPath)
+	local cJsonMedidas := "imageSizeNode.json"
+	local cCommand     := 'node ImageSizeNode.js "' + cFullPath + '" "' + cJsonMedidas + '"'
+	local cJavascript  := "ImageSizeNode.js"
+	local cTempPath    := "\imageSizeNode\"
+	local cRootPath    := GetSRVProfString("ROOTPATH","")
+	local jMedidas     := JsonObject():New()
+    local lWait        := .t.
+
+	jMedidas["success"] := .t.
+	jMedidas["message"] := "OK"
+
+	FileIo():makeFolder(cTempPath)
+
+	if !resource2File(cJavascript,cTempPath+cJavascript)
+		jMedidas["success"] := .f.
+		jMedidas["message"] := "Erro ao extrair o arquivo " + cJavascript + " do RPO, para a pasta " + cTempPath
+	endif
+
+	WaitRunSrv( @cCommand , @lWait , cRootPath + cTempPath )
+
+	if !file(cTempPath+cJsonMedidas)
+		jMedidas["success"] := .f.
+		jMedidas["message"] := "Arquivo de medidas não encontrado: " + "\"+cJsonMedidas
+	endif
+
+	if jMedidas["success"]
+		cMedidas := memoRead(cTempPath+cJsonMedidas)
+		jMedidas:fromJson(cMedidas)
+		jMedidas["success"] := .t.
+		jMedidas["message"] := "OK"
+        fErase(cTempPath+cJsonMedidas)
+	endif
+
+return jMedidas

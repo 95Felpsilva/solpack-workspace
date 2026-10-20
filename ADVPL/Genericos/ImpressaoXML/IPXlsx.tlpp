@@ -1,0 +1,236 @@
+#include 'totvs.ch'
+
+
+user function IPXlsx()
+return
+
+/*/{Protheus.doc} IPXlsx
+Classe para gerar arquivo excel através da classe padrão FwPrinterXLSX
+@type class
+@version 12.1.2310
+@author Tiago Faria
+@since 5/15/2024
+/*/
+	class IPXlsx from FwPrinterXlsx
+		private data aSheet as array
+		private cFileName
+		public method new()
+		public method addLine()
+		public method getCfgSheet()
+		public method setCfgSheet()
+		public method generateXlsx()
+		public method formatCellNumberMilhar()
+		private method excelDef()
+		private method calculateCellWidthSize()
+		private method formatCell()
+	endclass
+
+method new(cFile) class IPXlsx
+	_Super:new()
+	::excelDef(cFile)
+	::aSheet := {}
+return self
+/*/{Protheus.doc} IPXlsx::excelDef
+Ativa a classe FwPrinterXLSX
+@type method
+@version 12.1.2310
+@author Tiago Faria
+@since 5/15/2024
+@param cFile, character, Path completo do arquivo XLSX
+@return logical, se true ativo com sucesso se false houve erro na ativação
+/*/
+method excelDef(cFile) class IPXlsx
+	local oFileW   := FwFileWriter():New(cFile)
+	local lRet := ::Activate(cFile, oFileW)
+	if lRet
+		::cFileName := cFile
+	endif
+return lRet
+/*/{Protheus.doc} IPXlsx::addLine
+Adiciona uma linha na sheet de acordo com  o array recebido
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 5/15/2024
+@param cSheet, character, Nome da Sheet
+@param aLine, array, array com as celulas da linha que será adicionada
+@param lCalculateCellWidth, logical, se true indica que deve calcular o tamanho da largura das colunas
+@param oIPXlsxFormat, object, classe para modificar o formato das celulas caso necessário
+/*/
+method addLine(cSheet,aLine,lCalculateCellWidth,oIPXlsxFormat,aLineHeaderName) class IPXlsx
+	local oSheet := ::getCfgSheet(cSheet)
+	local nCell := 0
+	local nLine := oSheet["line"] + 1
+	default lCalculateCellWidth := .t.
+	default oIPXlsxFormat := IPXlsxFormat():Default()
+
+	for nCell := 1 to len(aLine)
+		xValue := aLine[nCell]
+		if valtype(xValue) == "D"
+			::formatCell(oIPXlsxFormat:cellDate(aLineHeaderName[nCell],xValue))
+
+			_Super:setDate(nLine,nCell,xValue)
+
+			_Super:ResetCellsFormat()
+		elseif valTYpe(xValue) == "N"
+			if xValue < 0	
+				::formatCell(oIPXlsxFormat:cellRed(/*cCorFonte*/,/*cCorFundo*/,aLineHeaderName[nCell],xValue))			
+			endif
+			::formatCell(oIPXlsxFormat:CellNumberMilhar(/*cCorFonte*/,/*cCorFundo*/,aLineHeaderName[nCell],xValue))
+
+			_Super:setValue(nLine,nCell,xValue)
+
+			if xValue < 0
+				_Super:ResetCellsFormat()
+			endif
+		else
+			::formatCell(oIPXlsxFormat:cellText(aLineHeaderName[nCell],xValue))
+			_Super:setValue(nLine,nCell,xValue)
+		endif
+
+		if lCalculateCellWidth
+			::calculateCellWidthSize(@oSheet,nCell,xValue,aLine)
+		endif
+	next nCell
+
+	oSheet['line'] := nLine
+
+	::setCfgSheet(oSheet)
+return
+/*/{Protheus.doc} IPXlsx::calculateCellWidthSize
+Realiza o calculo do tamanho da largura da célula que deverá sair no arquivo XLSX
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 5/15/2024
+@param oSheet, object, JSON com a configuração da sheet
+@param nCellCacl, numeric, Posição da coluna que será calculado o tamanho
+@param xValue, variant, Valor da coluna que será calculado o tamanho
+@param aLine, array, Array com todas as celulas existentes na linha
+/*/
+method calculateCellWidthSize(oSheet,nCellCacl,xValue,aLine) class IPXlsx
+	local nCell             := 0
+	local nLenColumnDefault := 8.43
+	local nLenColumn1Char   := 1.3
+	local xValueWidth       := nil
+	local lRet 				:= .t.
+	if oSheet["calculateCellWidthSize"] == .f.
+		oSheet["columnsWidth"] := array(len(aLine))
+		for nCell := 1 to len(oSheet["columnsWidth"])
+			oSheet["columnsWidth"][nCell] := nLenColumnDefault
+		next nCell
+
+		oSheet["calculateCellWidthSize"] := .t.
+	endif
+
+	xValueWidth := alltrim(allToChar(xValue))
+	nWidthCell := len(xValueWidth) * nLenColumn1Char
+	/*
+	quando o script calculo o tamaho de 291.2 parou de sair as linhas do excel
+	para garantir travei o valor em 200
+	*/
+	if nWidthCell > 200
+		nWidthCell := 200
+	endif
+	if nWidthCell > oSheet["columnsWidth"][nCellCacl]
+		oSheet["columnsWidth"][nCellCacl] := nWidthCell
+		lRet := _Super:SetColumnsWidth(nCellCacl/*nColFrom*/,nCellCacl/*nColTo*/,nWidthCell)
+	endif
+return lRet
+/*/{Protheus.doc} IPXlsx::getCfgSheet
+Recupera objeto json com a configuração da sheet
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 5/15/2024
+@param cSheetName, character, Nome da Shet
+@return json, Json com a configuração da sheet
+/*/
+method getCfgSheet(cSheetName) class IPXlsx
+	local nPos := aScan(::aSheet,{|X|X['sheet'] == cSheetName})
+	local oSheetCFG := nil
+
+	if nPos > 0
+		oSheetCFG := ::aSheet[nPos]
+	else
+		::addSheet(cSheetName)
+		oSheetCFG  := JsonObject():new()
+		oSheetCFG["sheet"] := cSheetName
+		oSheetCFG["line"] := 0
+		oSheetCFG["columnsWidth"] := {}
+		oSheetCFG["calculateCellWidthSize"] := .f.
+
+		aAdd(::aSheet,oSheetCFG)
+	endif
+return oSheetCFG
+/*/{Protheus.doc} IPXlsx::setCfgSheet
+Atualiza as definições da sheet
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 5/15/2024
+@param oSheet, object, Objeto json da sheet
+/*/
+method setCfgSheet(oSheet) class IPXlsx
+	local nPos := aScan(::aSheet,{|oSheetAtu| oSheetAtu['sheet'] == oSheet['sheet'] })
+
+	if nPos > 0
+		::aSheet[nPos] := oSheet
+	endif
+return
+/*/{Protheus.doc} IPXlsx::generateXlsx
+Realiza a geração do arquivo XLSX no direório informado e abre o arquivo na estação do usuário
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 5/15/2024
+@param lOpen, logical, Se true abre o arquivo na estação do usuário
+@return logical, se true arquivo gerado com sucesso se false houve erro na geração do arquivo.
+/*/
+method generateXlsx(lOpen) class IPXlsx
+	local cFileXLSX := ::cFileName
+	local cFileREL  := ""
+	local lRet 		:= .f.
+	local cAuxFil	:= ""
+
+	default lOpen 	:= .t.
+
+	if ".rel" $ LOWER(cFileXLSX)
+		cFileXLSX := strtran(cFileXLSX,".rel",".xlsx")
+		cFileREL := ::cFileName
+	elseif ".xlsx" $ LOWER(cFileXLSX)
+		cFileREL := strtran(cFileXLSX,".xlsx",".rel")
+	endif
+
+	if !(".xlsx" $ LOWER(cFileXLSX))
+		cFileXLSX += ".xlsx"
+	endif
+
+	_Super:toXlsx()
+
+	if file(cFileREL)
+		fErase(cFileREL)
+	endif
+
+	cAuxFil	:= StrTran(cFileXLSX, ".xlsx", "")
+
+	if File(cAuxFil)
+		FErase(cAuxFil)
+	endif
+
+	lRet := file(cFileXLSX)
+
+	if lRet .and. lOpen
+		ShellExecute("Open",cFileXLSX,"","",1)
+	endif
+
+	::aSheet := {}
+return lRet
+
+method formatCell(jFormat) class IPXlsx
+return _Super:SetCellsFormat(jFormat["horAlignment"], jFormat["vertAlignment"], jFormat["wrapText"], jFormat["rotation"], jFormat["textColor"], jFormat["bgColor"], jFormat["customFormat"])
+
+method formatCellNumberMilhar(cCorFonte,cCorFundo,oIPXlsxFormat) class IPXlsx
+	default oIPXlsxFormat := IPXlsxFormat():Default()
+
+return ::formatCell(oIPXlsxFormat:cellNumberMilhar(cCorFonte,cCorFundo))

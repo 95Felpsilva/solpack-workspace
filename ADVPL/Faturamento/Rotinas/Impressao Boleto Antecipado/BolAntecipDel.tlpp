@@ -1,0 +1,426 @@
+#include 'totvs.ch'
+#include 'totvs.ch'
+#include 'topconn.ch'
+
+user function BolAntecipDel();return
+
+/*/{Protheus.doc} BolAntecipDel
+Classe com as funcionalidades para deletar o boleto antecipado
+@type class
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+/*/
+	class BolAntecipDel from BolAntecip
+		public data lEmailFinanceiro
+		public data aTitulos
+		public data cEmailFinanceiro
+		public method new() CONSTRUCTOR
+		public method canAccess()
+		public method isBoletoGerado()
+		public method deletaTitulo()
+		public method deletaBaixa()
+		public method transfereCarteira()
+		public method deletaRelRAxPV()
+		public method envEmailFinanceiro()
+	endclass
+/*/{Protheus.doc} BolAntecipDel::new
+Método construtor da classe
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+/*/
+method new() class BolAntecipDel
+	_Super:new()
+	::lEmailFinanceiro := .f.
+	::aTitulos         := {}
+	::cEmailFinanceiro := getNewPar("ZZ_BAMAILF","gustavo@solpack.com.br;caroline@solpack.com.br;thais@solpack.com.br")
+return
+/*/{Protheus.doc} BolAntecipDel::canAccess
+Indica se pode acessar o titulo para realizar ALTERAÇÃO, EXCLUSÃO E ETC
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+@return logical, Se true pode acessar se false nao pode
+/*/
+method canAccess(lHelp,cNumPV,nRecnoSE1) class BolAntecipDel
+	local cAlias      := ''
+	local cQuery      := ''
+	local aArea       := Lj7GetArea({"SE1", "SC5"})
+	default lHelp     := .t.
+	default nRecnoSE1 := SE1->(recno())
+	default cNumPV    := SUBSTRING(SE1->E1_NUM,4,6)
+
+	if IsInCallStack("deletaTitulo") .or. isExecAuto("lF040Auto") .or. (::isLibAdmin() .and. !IsInCallStack("isBoletoGerado"))
+		return .t.
+	endif
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "	COUNT(C5_NUM) AS QTDPV" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SC5') + CRLF
+
+	cQuery += "INNER JOIN" + CRLF
+	cQuery += "	" + RetSqlTab('SE1') + CRLF
+	cQuery += "ON 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SE1') + CRLF
+	if nRecnoSE1 > 0
+		cQuery += "	AND SE1.R_E_C_N_O_ = " + cValToChar(nRecnoSE1) + CRLF
+	else
+		cQuery += "	AND E1_NUM = '" + getNumTitulo(cNumPV) + "'" + CRLF
+	endif
+	cQuery += "	AND E1_TIPO IN ('" + ::cTipo + "','RA')" + CRLF
+	cQuery += "	AND E1_PREFIXO = '" + ::cPrefixo + "'" + CRLF
+	cQuery += "	AND " + RetSqlDel('SE1') + CRLF
+
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SC5') + CRLF
+	cQuery += "	AND C5_NUM = '" + cNumPV + "'" + CRLF
+	cQuery += "	AND " + RetSqlDel('SC5') + CRLF
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+
+	lRet := (cAlias)->(QTDPV) == 0
+
+	if !lRet .and. lHelp
+		u_myHelp("Não é possível alterar/excluir/subistituir/baixar ou excluir a baixa de um título atrelado ao Pedido de Vendas",,"BOLETO ANTECIPADO")
+	endif
+
+	(cAlias)->(dbCloseArea())
+
+	Lj7RestArea(aArea)
+return lRet
+/*/{Protheus.doc} BolAntecipDel::isBoletoGerado
+Retorna se o boleto ja foi gerado para o pedido de Vendas
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 10/11/2021
+@param lHelp, logical, Indica se exibe mensagem
+@return logical, Se true boleto ja foi gerado se false não foi
+/*/
+method isBoletoGerado(lHelp) class BolAntecipDel
+	default lHelp := .f.
+return !::canAccess(lHelp,SC5->C5_NUM,0)
+/*/{Protheus.doc} BolAntecipDel::deletaTitulo
+Deleta o título atrelado ao PV
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 17/11/2021
+@return logical, Se true o título foi deletado com sucesso
+/*/
+method deletaTitulo(cNumPV,lApenasRA,cParcela) class BolAntecipDel
+	local aCab          := {}
+	local aArea         := Lj7GetArea({"SE1"})
+	local cAlias        := ''
+	local cQuery        := ''
+	local dDtBkp		:= dDataBase
+	local lSolicitaBaixaCNAB := .t.
+	private lMsErroAuto := .f.
+	default cNumPV      := SC5->C5_NUM
+	default lApenasRA   := .f.
+	default cParcela    := ""
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "	SE1.R_E_C_N_O_ AS E1RECNO" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SE1') + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SE1') + CRLF
+	cQuery += "	AND E1_NUM = '" + getNumTitulo(cNumPV) + "'" + CRLF
+	if !empty(cParcela)
+		cQuery += "	AND E1_PARCELA = '" + cParcela + "'" + CRLF
+	endif
+	if lApenasRA
+		cQuery += "	AND E1_TIPO = 'RA'" + CRLF
+	else
+		cQuery += "	AND E1_TIPO IN ('" + ::cTipo + "')" + CRLF
+	endif
+	cQuery += "	AND E1_PREFIXO = '" + ::cPrefixo + "'" + CRLF
+	cQuery += "	AND E1_FORPGT IN " + formatIn(::cFormaPagamento,"/") + CRLF
+	cQuery += "	AND " + RetSqlDel('SE1') + CRLF
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+
+	BEGIN TRANSACTION
+		while (cAlias)->(!Eof())
+			aCab               := {}
+			lSolicitaBaixaCNAB := .T.
+			SE1->(dbGoTo((cAlias)->(E1RECNO)))
+			
+			if alltrim(SE1->E1_TIPO) == "RA"
+				if posicione("SE5",7,xFilial("SE5")+SE1->(E1_PREFIXO+E1_NUM+E1_PARCELA+E1_TIPO+E1_CLIENTE+E1_LOJA),"!Eof()") //E5_FILIAL+E5_PREFIXO+E5_NUMERO+E5_PARCELA+E5_TIPO+E5_CLIFOR+E5_LOJA+E5_SEQ
+					dDataBase := SE5->E5_DTDISPO
+				else
+					dDataBase := SE1->E1_VENCREA
+				endif
+			endif
+
+			if isTituloBaixado()
+				if !msgYesNo("O Título referente ao Boleto Antecipado já está baixado, deseja continuar com a exclusão do PV?")
+					disarmTransaction()
+					exit
+				endif
+				lSolicitaBaixaCNAB := .f.
+				if !::deletaBaixa()
+					disarmTransaction()
+					exit
+				endif
+			endif
+
+			if isCNAB()
+				if !::transfereCarteira(lSolicitaBaixaCNAB)
+					disarmTransaction()
+					exit
+				endif
+			endif
+
+			if isRA()
+				if !::deletaRelRAxPV()
+					disarmTransaction()
+					exit
+				endif
+			endif
+
+			aadd(aCab, {"E1_NUM"    , SE1->E1_NUM    , Nil})
+			aadd(aCab, {"E1_PREFIXO", SE1->E1_PREFIXO, Nil})
+			aadd(aCab, {"E1_FORPGT" , SE1->E1_FORPGT , Nil})
+			aadd(aCab, {"E1_TIPO"   , SE1->E1_TIPO   , Nil})
+			aadd(aCab, {"E1_PARCELA", SE1->E1_PARCELA, Nil})
+			aadd(aCab, {"E1_NATUREZ", SE1->E1_NATUREZ, Nil})
+			aadd(aCab, {"E1_CLIENTE", SE1->E1_CLIENTE, Nil})
+			aadd(aCab, {"E1_LOJA"   , SE1->E1_LOJA   , Nil})
+			aadd(aCab, {"E1_EMISSAO", SE1->E1_EMISSAO, Nil})
+			aadd(aCab, {"E1_VENCTO" , SE1->E1_VENCTO , Nil})
+			aadd(aCab, {"E1_VALOR"  , SE1->E1_VALOR  , Nil})
+			aadd(aCab, {"E1_PORTADO", SE1->E1_PORTADO, Nil})
+			aadd(aCab, {"E1_AGEDEP" , SE1->E1_AGEDEP , Nil})
+			aadd(aCab, {"E1_CONTA"  , SE1->E1_CONTA  , Nil})
+
+			aCab := FwVetByDic(aCab,"SE1")
+
+			MSExecAuto({|x,y| FINA040(x,y)}, aCab, 5)
+
+			if lMsErroAuto
+				mostraErro()
+				disarmTransaction()
+				exit
+			endif
+
+			(cAlias)->(dbSkip())
+		enddo
+		(cAlias)->(dbCloseArea())
+
+		::atualizaStatus()
+		::envEmailFinanceiro()
+	END TRANSACTION
+
+	dDataBase := dDtBkp
+
+	Lj7RestArea(aArea)
+return !lMsErroAuto
+/*/{Protheus.doc} BolAntecipDel::transfereCarteira
+Realiza a transferencia de carteira do titulo
+@type method
+@version 12.1.33
+@author Tiago Faira
+@since 18/11/2021
+@param lSolicitaBaixaCNAB, logical, se true gera a tabela FI2 para envio de solicitacao da baixa do boleto no cnab se false não gera a tabela FI2
+@return logical, Se true deu tudo certo com a transferencia se false houve erro
+/*/
+method transfereCarteira(lSolicitaBaixaCNAB) class BolAntecipDel
+	Local aTit          := {}
+	local aAux          := {}
+	Private lMsErroAuto := .F.
+	default lSolicitaBaixaCNAB := .t.
+	//Chave do título
+	aadd(aTit, {"E1_PREFIXO", SE1->E1_PREFIXO, Nil})
+	aadd(aTit, {"E1_NUM"    , SE1->E1_NUM    , Nil})
+	aadd(aTit, {"E1_PARCELA", SE1->E1_PARCELA, Nil})
+	aadd(aTit, {"E1_TIPO"   , SE1->E1_TIPO   , Nil})
+
+	//Informações bancárias
+	aadd(aTit, {"AUTDATAMOV", dDataBase                , Nil})
+	aadd(aTit, {"AUTBANCO"  , criavar("A6_COD",.f.)    , Nil})
+	aadd(aTit, {"AUTAGENCIA", criavar("A6_AGENCIA",.f.), Nil})
+	aadd(aTit, {"AUTCONTA"  , criavar("A6_NUMCON",.f.) , Nil})
+	aadd(aTit, {"AUTSITUACA", "0"                      , Nil})
+	aadd(aTit, {"AUTNUMBCO" , criavar("E1_NUMBCO",.f.) , Nil})
+	aadd(aTit, {"AUTGRVFI2" , lSolicitaBaixaCNAB       , Nil})
+	/*
+	//Carteira descontada deve ser encaminhado o valor de crédito, desconto e IOF já calculados
+	If cSituaca $ "2|7"
+		AAdd(aTit, {"AUTDESCONT",   090,    Nil})
+		AAdd(aTit, {"AUTCREDIT",    750,    Nil})
+		AAdd(aTit, {"AUTIOF",       010,    Nil})
+	EndIf
+	*/
+	MsExecAuto({|nOperacao, aTitulo| FINA060(nOperacao, aTitulo)}, 2, aTit)
+
+	If lMsErroAuto
+		mostraErro()
+	else
+		::lEmailFinanceiro := .t.
+		aAux := {}
+		aAdd(aAux,SE1->E1_NUM)
+		aAdd(aAux,SE1->E1_PARCELA)
+		aAdd(aAux,SE1->E1_CLIENTE)
+		aAdd(aAux,SE1->E1_LOJA)
+		aAdd(aAux,SE1->E1_NOMCLI)
+		aAdd(aAux,SE1->E1_VALOR)
+		aAdd(::aTitulos,aAux)
+	EndIf
+return !lMsErroAuto
+/*/{Protheus.doc} BolAntecipDel::deletaBaixa
+Deleta a baixa do título
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 18/11/2021
+@return logical, Se true a baixa foi deletada com sucess, se false houve erro
+/*/
+method deletaBaixa() class BolAntecipDel
+	local aTit          := {}
+	local cAlias := ''
+	local cQuery := ''
+	private lMsErroAuto := .f.
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "	E5_SEQ," + CRLF
+	cQuery += "	E5_VALOR" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('SE5') + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('SE5') + CRLF
+	cQuery += "	AND E5_PREFIXO = '" + SE1->E1_PREFIXO + "'" + CRLF
+	cQuery += "	AND E5_NUMERO = '" + SE1->E1_NUM + "'" + CRLF
+	cQuery += "	AND E5_PARCELA = '" + SE1->E1_PARCELA + "'" + CRLF
+	cQuery += "	AND E5_TIPO = '" + SE1->E1_TIPO + "'" + CRLF
+	cQuery += "	AND E5_TIPODOC = 'BA'" + CRLF
+	cQuery += "	AND E5_MOTBX = '" + ::cMotBx + "'" + CRLF
+	cQuery += "	AND " + RetSqlDel('SE5') + CRLF
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+
+	while (cAlias)->(!eof())
+		aTit := {}
+		aadd(aTit, {"E1_PREFIXO", SE1->E1_PREFIXO     , Nil}) // 01
+		aadd(aTit, {"E1_NUM"    , SE1->E1_NUM         , Nil}) // 02
+		aadd(aTit, {"E1_PARCELA", SE1->E1_PARCELA     , Nil}) // 03
+		aadd(aTit, {"E1_TIPO"   , SE1->E1_TIPO        , Nil}) // 04
+		aadd(aTit, {"AUTMOTBX"  , ::cMotBX            , Nil}) // 05
+		aadd(aTit, {"AUTSEQ"    , (cAlias)->(E5_SEQ)  , Nil})
+		aadd(aTit, {"AUTVALREC"  , (cAlias)->(E5_VALOR), Nil})
+
+		MSExecAuto({|x,y| FINA070(x,y)},aTit,6)
+
+		If  lMsErroAuto
+			MOSTRAERRO()
+			exit
+		endif
+		(cAlias)->(dbSkip())
+	enddo
+return !lMsErroAuto
+
+method deletaRelRAxPV() class BolAntecipDel
+	local lRet := .t.
+
+	local cAlias := ''
+	local cQuery := ''
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "	FIE.R_E_C_N_O_ AS RECNOFIE" + CRLF
+	cQuery += "FROM" + CRLF
+	cQuery += "	" + RetSqlTab('FIE') + CRLF
+	cQuery += "WHERE 1=1" + CRLF
+	cQuery += "	AND " + RetSqlFil('FIE') + CRLF
+	cQuery += "	AND FIE_CART = 'R'" + CRLF
+	cQuery += "	AND FIE_CLIENT = '" + SE1->E1_CLIENTE  + "'" + CRLF
+	cQuery += "	AND FIE_LOJA = '" + SE1->E1_LOJA  + "'" + CRLF
+	cQuery += "	AND FIE_PREFIX = '" + SE1->E1_PREFIXO  + "'" + CRLF
+	cQuery += "	AND FIE_NUM = '" + SE1->E1_NUM  + "'" + CRLF
+	cQuery += "	AND FIE_PARCEL = '" + SE1->E1_PARCELA  + "'" + CRLF
+	cQuery += "	AND FIE_TIPO = 'RA'" + CRLF
+	cQuery += "	AND " + RetSqlDel('FIE') + CRLF
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+
+	while (cAlias)->(!Eof())
+		FIE->(dbGoTo((cAlias)->(RECNOFIE)))
+		reclock("FIE",.f.)
+		FIE->(dbDelete())
+		FIE->(msUnlock())
+
+		(cAlias)->(dbSkip())
+	enddo
+
+	(cAlias)->(dbCloseArea())
+return lRet
+
+method envEmailFinanceiro() class BolAntecipDel
+	local nTitulo  := 0
+	local cHTML    := ""
+	local cEmail   := ::cEmailFinanceiro
+	local cNum     := ""
+	local cParcela := ""
+	local cCliente := ""
+	local cLoja    := ""
+	local cNome    := ""
+	local nValor   := 0
+
+	if ::lEmailFinanceiro
+		cHTML += '<table style="border: 1px solid #ccc; margin: 0; padding: 0;  min-width:100%; border-radius: 3px; background: #f8f8f8">'
+		cHTML += '	<thead>'
+		cHTML += '		<tr style="border: 1px solid #ddd; padding: 0.35em">'
+		cHTML += '			<th class="title" style="line-height: 100%; font-weight: bold; color: #000; padding: 0.625em; text-align: center; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase">Título</th>'
+		cHTML += '			<th class="title" align="left" style="line-height: 100%; font-weight: bold; color: #000; padding: 0.625em; text-align: center; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase">Parcela</th>'
+		cHTML += '			<th class="title" align="left" style="line-height: 100%; font-weight: bold; color: #000; padding: 0.625em; text-align: center; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase">Cliente</th>'
+		cHTML += '			<th class="title" align="right" style="line-height: 100%; font-weight: bold; color: #000; padding: 0.625em; text-align: center; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase">Loja</th>'
+		cHTML += '			<th class="title" align="right" style="line-height: 100%; font-weight: bold; color: #000; padding: 0.625em; text-align: center; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase">Nome</th>'
+		cHTML += '			<th class="title" align="center" style="line-height: 100%; font-weight: bold; color: #000; padding: 0.625em; text-align: center; font-size: 0.85em; letter-spacing: 0.1em; text-transform: uppercase">Valor</th>'
+		cHTML += '		</tr>'
+		cHTML += '	</thead>'
+		cHTML += '	<tbody>'
+
+		for nTitulo := 1 to len(::aTitulos)
+			cNum     := ::aTitulos[nTitulo,1]
+			cParcela := ::aTitulos[nTitulo,2]
+			cCliente := ::aTitulos[nTitulo,3]
+			cLoja    := ::aTitulos[nTitulo,4]
+			cNome    := ::aTitulos[nTitulo,5]
+			nValor   := ::aTitulos[nTitulo,6]
+
+			cHTML += '		<tr style="background-color: #fff; border: 1px solid #ddd; padding: 0.35em">'
+			cHTML += '			<td class="text" style="line-height: 100%; text-align: center; color: #000; padding: 0.625em; ">' + alltrim(cNum) + '</td>'
+			cHTML += '			<td class="text" style="line-height: 100%; text-align: center; color: #000; padding: 0.625em; ">' + alltrim(cParcela) + '</td>'
+			cHTML += '			<td class="text" style="line-height: 100%; text-align: center; color: #000; padding: 0.625em; ">' + alltrim(cCliente) + '</td>'
+			cHTML += '			<td class="text" style="line-height: 100%; text-align: center; color: #000; padding: 0.625em; ">' + alltrim(cLoja) + '</td>'
+			cHTML += '			<td class="text" style="line-height: 100%; text-align: center; color: #000; padding: 0.625em; ">' + alltrim(cNome) + '</td>'
+			cHTML += '			<td class="text" style="line-height: 100%; text-align: center; color: #000; padding: 0.625em; ">' + alltrim(transform(nValor,getSX3Cache("E1_VALOR","X3_PICTURE"))) + '</td>'
+			cHTML += '		</tr>'
+		next nTitulo
+
+		cHTML += '	</tbody>'
+		cHTML += '</table>'
+
+		u_sendMail("Boletos Antecipados para serem baixados no Banco",cHTML,cEmail)
+	endif
+return
+
+static function isExecAuto(cVar)
+return type(cVar) == "L" .and. &(cVar)
+
+static function getNumTitulo(cNumPV)
+return PadL(cNumPV,getSX3Cache("E1_NUM","X3_TAMANHO"),"0")
+
+static function isCNAB()
+return SE1->E1_SITUACA == "1"
+
+static function isTituloBaixado()
+return SE1->E1_SALDO == 0
+
+static function isRA()
+return alltrim(SE1->E1_TIPO) == 'RA'

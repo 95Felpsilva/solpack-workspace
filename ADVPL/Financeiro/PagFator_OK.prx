@@ -1,0 +1,24 @@
+#include "rwmake.ch"  
+
+//////////////////////////////////////////////////////////////////////////////////////
+//                              													//
+//  Retorna o Fator de Vencimento conforme o Código de Barras ou Linha Digitável.  	//
+//                              													//
+//////////////////////////////////////////////////////////////////////////////////////
+
+User Function PagFator()
+
+// Declaração das Variáveis.
+Local _cFator	:= ""
+
+If !Empty(SE2->E2_CODBAR)
+        _cFator :=  Substr(SE2->E2_CODBAR,6,4)
+Else
+     //Eh necessao o strtran pois os codigos da linha digitaval
+     //de titulos sem registro bancario, ou seja sem o vencimento
+     //e sem o valor nao pegam todo o tamanho do campo entao
+     //se nao tiver completo complementa com zero 0
+     _cFator := Strtran( Substr(SE2->E2_IPTE,34,4) , " ","0")
+EndIf
+
+Return(_cFator)

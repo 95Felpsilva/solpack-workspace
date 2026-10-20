@@ -1,0 +1,713 @@
+#include 'totvs.ch'
+#include 'topconn.ch'
+
+//static cCharBrkLineDB := if(TCGetDb() == "ORACLE",";",",")
+
+/*/{Protheus.doc} IPJson
+Classe com funções Uteis para trabalhar com JSON
+@type class
+@version 12.1.23
+@author Tiago Faira
+@since 22/07/2024
+/*/
+class IPJson
+	static method getObject()
+	static method getArray()
+	static method removeCharSpecial()
+	static method toReclock()
+	static method toFwBulk()
+	static method toInsertSQL()
+	static method toInsertOracle()
+	static method arrayToJson()
+	static method compare()
+	static method groupBy()
+	static method jsonToArray()
+	static method toArrayExecAuto()
+	static method aliasToJson()
+	static method clone()
+	static method merge()
+	static method toExcel()
+endclass
+
+/*/{Protheus.doc} IPJson::getObject
+Retorna o objeto JSON do parametro cProperty, caso não exista retorna a propriedade no JSON retorna um objeto JSON vazio
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 22/07/2024
+@param cProperty, character, ID da propriedade do JSON
+@param oJSON, object, Objecto do JSON a ser pesquisado a propridade
+@return json, retorna objeto json correspondente ao parametro cProperty
+/*/
+method getObject(cProperty,oJSON) class IPJson
+	local oObject := nil
+	default oJSON := JsonObject():New()
+
+	cProperty := IPJson():removeCharSpecial(cProperty)
+	oObject := oJSON[cProperty]
+	if valType(oObject) == "U"
+		oObject := JsonObject():new()
+		oJSON[cProperty] := JsonObject():new()
+		oJSON[cProperty] := oObject
+	endif
+return oObject
+/*/{Protheus.doc} IPJson::getArray
+Retorna array contido no JSON que tenha o ID cProperty, caso não exista retorna a propriedade no JSON retorna um objeto JSON vazio
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 22/07/2024
+@param cProperty, character, ID da propriedade do JSON
+@param oJSON, object, Objecto do JSON a ser pesquisado a propridade
+@return array, retorna array correspondente ao parametro cProperty
+/*/
+method getArray(cProperty,oJson) class IPJson
+	local aArray      := nil
+	default oJSON     := JsonObject():New()
+	default cProperty := ""
+
+	cProperty := IPJson():removeCharSpecial(cProperty)
+
+	aArray := oJSON[cProperty]
+	if valType(aArray) == "U"
+		aArray := {}
+		oJSON[cProperty] := JsonObject():new()
+		oJSON[cProperty] := aArray
+	endif
+return aArray
+/*/{Protheus.doc} IPJson::removeCharSpecial
+Remove caracteres especiais que da problema no ADVPL para formar uma chave exemplo: {"AB.C": 123}, o "." na chave do JSON o ADVPL não aceita
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 31/07/2024
+@param cProperty, character, ID da propriedade do JSON que vai ser acessada
+@return character, retorna o código da propriedade sem os caracteres especiais
+/*/
+method removeCharSpecial(cProperty) class IPJson
+	cProperty := strtran(cProperty,":","")
+	cProperty := strtran(cProperty,".","")
+return cProperty
+/*/{Protheus.doc} IPJson::toReclock
+Realiza a atualização de uma tabela a partir de um objeto JSON
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 01/08/2024
+@param cAlias, character, Alias da Tabela
+@param oJson, object, Objeto JSON com os campos a serem atualizados, exemplo {"Z1_PRODUTO":"PA1","Z1_QTD": 10}
+@param lReclock, logical, se true indica se deve executar a funcao reclock e msunlock, se false indica que o reclock e msunlock vai ser dado antes de executar a função, valor default .F.
+@param lInsert, logical, indica se o reclock é para inserção ou atualização do registro	, valor default .T.
+@return logical, se true o registro foi inserido/atualizado com sucesso se false houve erro
+/*/
+method toReclock(cAlias,oJson,lReclock,lInsert) class IPJson
+	local aFields := oJson:getNames()
+	local nFields := 0
+	local nPos    := 0
+	local xValue  := nil
+	local lRet 	  := .t.
+	default lReclock := .f.
+	default lInsert := .t.
+
+	BEGIN TRANSACTION
+		if lReclock
+			recLock(cAlias,lInsert)
+		endif
+
+		for nFields := 1 to len(aFields)
+			cField := aFields[nFields]
+			nPos := (cAlias)->(fieldPos(cField))
+
+			if nPos == 0
+				loop
+			endif
+
+			xValue := oJson[cField]
+			cType := valType(xValue)
+			cTypeX3 := getSX3Cache(cField,"X3_TIPO")
+			if !empty(cTypeX3) .and. cTypeX3 <> cType
+				lRet := .f.
+				u_myHelp("Valor do campo " + cField + " está diferente do definido no dicionário de dados, tipo no dicionario " + cTypeX3 + " tipo no update " + cType + " não será possivel seguir com o reclock na tabela " + cAlias)
+				exit
+			endif
+			if cType == "U"
+				lRet := .f.
+				u_myHelp("Valor do campo " + cField + " está nulo, não será possivel seguir com o reclock na tabela " + cAlias)
+				exit
+			endif
+
+			(cAlias)->(fieldPut(nPos,xValue))
+		next nFields
+
+		if lReclock
+			(cAlias)->(msUnlock())
+		endif
+
+		if !lRet
+			disarmTransaction()
+		endif
+
+	END TRANSACTION
+return lRet
+/*/{Protheus.doc} IPJson::toFwBulk
+Insere os itens recebidos por parametro na tabela através da classe FwBulk
+@type method
+@version 12.1.2410
+@author Tiago Faria
+@since 10/07/2025
+@param cTable, character, Tabela, exemplo "SA1"
+@param aItems, array, Array de JSON contendo os itens que devem ser inseridos na tabela
+@return json, Retorna o seguinte objeto json:
+"status": true ou false
+"message": string
+"secInicio": segundos inicio
+"secFim"]: segundos fim
+"tempoExecucao": tempo em segundos
+"funcao": fwbulk ou reclock
+/*/
+method toFwBulk(cTable,aItems,lForceReclock) class IPJson
+	local aBulkStruct     := {}
+	local aFields         := {}
+	local aLine           := {}
+	local cField          := ""
+	local jItem           := nil
+	local jItem1          := nil
+	local lRet            := .t.
+	local nField          := 0
+	local nItem           := 0
+	local nQtdField       := 0
+	local nQtdItens       := len(aItems)
+	local oBulk           := FwBulk():New(retSqlName(cTable))
+	local lCanBulk        := oBulk:canBulk()
+	local jRet            := JsonObject():New()
+	local cIDLog		  := ""
+	local aFieldsRemove   := {"R_E_C_N_O_","S_T_A_M_P_","I_N_S_D_T_"}
+	local nRemove		  := 0
+	default lForceReclock := .f.
+
+	for nItem := 1 to len(aItems)
+		jItem := aItems[nItem]
+		for nRemove := 1 to len(aFieldsRemove)
+			cFieldRemove := aFieldsRemove[nRemove]
+			if jItem:hasProperty(cFieldRemove)
+				jItem:delName(cFieldRemove)
+			endif
+		next nRemove
+	next nItem
+
+
+	BEGIN SEQUENCE
+		jRet["status"]  := .t.
+		jRet["message"] := ""
+		jRet["funcao"]  := if(lCanBulk .and. !lForceReclock,"fwbulk","reclock")
+		cIDLog          := "[" + jRet["funcao"] + "]" + cTable + " " + cvalToChar(nQtdItens) + " itens"
+
+		TFLog():init(cIDLog)
+
+		if nQtdItens == 0
+			BREAK
+		endif
+
+		if !lCanBulk .or. lForceReclock
+			for nItem := 1 to len(aItems)
+				jItem := aItems[nItem]
+				IPJson():toReclock(cTable,jItem,.t./*lReclock*/,.t./*lInsert*/)
+			next nItem
+
+			BREAK
+		endif
+
+		jItem1    := aItems[1]
+		aFields   := jItem1:getNames()
+		nQtdField := len(aFields)
+
+		for nField := 1 to nQtdField
+			cField := aFields[nField]
+			cTipo  := getSX3Cache(cField,"X3_TIPO")
+
+			if cTipo == "D" .and. valType(jItem1[cField]) <> "D"
+				cTipo := "C"
+			endif
+
+			aAdd(aBulkStruct,{cField,cTipo,getSX3Cache(cField,"X3_TAMANHO"),getSX3Cache(cField,"X3_DECIMAL")})
+
+		next nField
+
+		oBulk:SetFields(aBulkStruct)
+
+		aLine := array(nQtdField)
+
+		for nItem := 1 to nQtdItens
+			jItem := aItems[nItem]
+
+			for nField := 1 to nQtdField
+				cField          := aFields[nField]
+				aLine[nField]   := jItem[cField]
+			next nField
+
+			oBulk:AddData(aLine)
+		next nItem
+
+		if isBlind()
+			lRet := oBulk:Close()
+		else
+			FWMsgRun(, {|| lRet := oBulk:Close()}, "Aguarde", "Gravando dados na tabela " + cTable + "...")
+		endif
+
+		if !lRet
+			jRet["message"] := oBulk:getError()
+		endif
+
+		oBulk:destroy()
+		oBulk:= nil
+	END SEQUENCE
+
+	TFLog():finish(cIDLog)
+	jLog                       := TFLog():getJsonLog(cIDLog)
+	jRet                       := IPJson():merge(jRet,jLog)
+	jRet["log_tempo_execucao"] := TFLog():getLog()
+	jRet["status"]             := lRet
+return jRet
+/*/{Protheus.doc} IPJson::toInsertSQL
+Transforma um array de objetos JSON em uma instrução de insert no banco de dados SQL
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 09/08/2024
+@param cTable, character, Nome da Tablea
+@param aItems, array, Array de objetos json
+@param lConvertUTF8, logical, Indica se deve converter a string do insert para UTF8
+@return character, Retorna instrução SQL para inserir os registros via TcSqlExec()
+/*/
+method toInsertSQL(cTable,aItems,lConvertUTF8) class IPJson
+	local nItem   := 0
+	local oItem   := nil
+	local cSql    := "INSERT INTO " + cTable + "("
+	local aFields := {}
+	local nField  := 0
+	local cQuery  := "SELECT TOP 1 * FROM " + cTable
+	local aStruct := {}
+	local cAlias  := ""
+	local nQtdField := 0
+	default lConvertUTF8 := .t.
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+	aStruct := (cAlias)->(dbStruct())
+	oStruct := IPJson():arrayToJson(aStruct,.t./*lDbStruct*/)
+
+	for nItem := 1 to len(aItems)
+		oItem := aItems[nItem]
+
+		aFields := oItem:getNames()
+
+		if nItem > 1
+			cSql += "," + CRLF
+		endif
+
+		if nItem == 1
+			for nField := 1 to len(aFields)
+				cField := aFields[nField]
+				if !oStruct:hasProperty(cField)
+					loop
+				endif
+				nQtdField++
+
+				if nQtdField > 1
+					cSql += ","
+				endif
+
+				cSql += aFields[nField]
+			next nField
+			cSql += ") VALUES " + CRLF
+		endif
+
+		cSql += "("
+		nQtdField := 0
+		for nField := 1 to len(aFields)
+			cField := aFields[nField]
+			nPos := aScan(aStruct,{|X| X[1] == cField})
+
+			if nPos > 0
+				nLenField := aStruct[nPos,3]
+			endif
+			if !oStruct:hasProperty(cField)
+				loop
+			endif
+
+			xValue := oItem[cField]
+			cType := valType(xValue)
+
+			nQtdField++
+
+			if nQtdField > 1
+				cSql += ","
+			endif
+
+			if cType == "C"
+				xValue := PadR(xValue,nLenField," ")
+				cSql += "N'" + strtran(xValue,"'","''") + "'"
+			elseif cType $ "N,F"
+				cSql += cValToChar(xValue)
+			elseif cType == "D"
+				cSql += dtos(xValue)
+			elseif cType == "L"
+				cSql += if(xValue,"1","0")
+			elseif cType == "J"
+				cSql += "N'" + strtran(xValue:toJson(),"'","''") + "'"
+			elseif cType == "U"
+				cSql += "null"
+			elseif cType == "B"
+				cSql += "N'" + strtran(getCbSource(xValue),"'","''") + "'"
+			else
+				u_myHelp("Tipo " + cType + " não mapeado!")
+			endif
+		next nField
+
+		cSql += ")"
+	next nItem
+
+	if lConvertUTF8
+		cSqlUTF8 := encodeUTF8(cSql,"cp1252")
+
+		if !empty(cSQLUTF8)
+			cSql := cSQLUTF8
+		endif
+	endif
+return cSql
+/*/{Protheus.doc} IPJson::toInsertOracle
+Transforma um array de objetos JSON em uma instruo de insert no banco de dados ORACLE
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 09/10/2025
+@param cTable, character, Nome da Tabela
+@param aItems, array, Array de objetos json
+@param lConvertUTF8, logical, Indica se deve converter a string do insert para UTF8
+@return character, Retorna instruo SQL para inserir os registros via TcSqlExec()
+/*/
+method toInsertOracle(cTable,aItems,lConvertUTF8) class IPJson
+	local nItem   := 0
+	local oItem   := nil
+	local cSql    := "INSERT ALL" + CRLF
+	local aFields := {}
+	local nField  := 0
+	local cQuery  := "SELECT * FROM " + cTable + " WHERE ROWNUM = 1"
+	local aStruct := {}
+	local cAlias  := ""
+	local nQtdField := 0
+	local nVazio 	:= 0
+	default lConvertUTF8 := .t.
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+	aStruct := (cAlias)->(dbStruct())
+	oStruct := IPJson():arrayToJson(aStruct,.t./*lDbStruct*/)
+
+	for nItem := 1 to len(aItems)
+		oItem := aItems[nItem]
+		nVazio := 0
+
+		aFields := oItem:getNames()
+
+		For nField := 1 to len(aFields)
+			If Empty(aItems[nItem][aFields[nField]])
+				nVazio++
+			Endif
+		Next nField
+
+		If nVazio == Len(aFields)
+			loop
+		EndIf
+
+		cSql += "INTO " + cTable + " ("
+
+		For nField := 1 to Len(aFields)
+			cSql += aFields[nField]
+
+			if nField < Len(aFields)
+				cSql += ","
+			Endif
+		Next nField
+
+		cSql += ") VALUES ("
+
+		nQtdField := 0
+
+		for nField := 1 to len(aFields)
+			cField := aFields[nField]
+			nPos := aScan(aStruct,{|X| X[1] == cField})
+
+			if nPos > 0
+				nLenField := aStruct[nPos,3]
+			endif
+			if !oStruct:hasProperty(cField)
+				loop
+			endif
+
+			xValue := oItem[cField]
+			cType := valType(xValue)
+
+			nQtdField++
+
+			if nQtdField > 1
+				cSql += ","
+			endif
+
+			if cType == "C"
+				xValue := PadR(xValue,nLenField," ")
+				cSql += "N'" + strtran(xValue,"'","''") + "'"
+			elseif cType $ "N,F"
+				cSql += cValToChar(xValue)
+			elseif cType == "D"
+				cSql += dtos(xValue)
+			elseif cType == "L"
+				cSql += if(xValue,"1","0")
+			elseif cType == "J"
+				cSql += "N'" + strtran(xValue:toJson(),"'","''") + "'"
+			elseif cType == "U"
+				cSql += "null"
+			elseif cType == "B"
+				cSql += "N'" + strtran(getCbSource(xValue),"'","''") + "'"
+			else
+				u_myHelp("Tipo " + cType + " não mapeado!")
+			endif
+		next nField
+
+		cSql += ")"
+		cSql += CRLF
+	next nItem
+
+	cSql += "SELECT * FROM dual"
+
+	/*
+	if lConvertUTF8
+		cSqlUTF8 := encodeUTF8(cSql,"cp1252")
+
+		if !empty(cSQLUTF8)
+			cSql := cSQLUTF8
+		endif
+	endif
+	*/
+
+
+return cSql
+/*/{Protheus.doc} IPJson::arrayToJson
+Transforma uma array simples em um json
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 09/08/2024
+@param aFields, array, array simples a ser transformado em JSON exemplo: {"A","B","C","D"}
+@return json, retorna json com os campos definidos no array exemplo : {"A":1,"B":2,"C":3,"D":4}
+/*/
+method arrayToJson(aFields,lDbStruct) class IPJson
+	local oJson       := JsonObject():New()
+	local nFields     := 0
+	local cField      := ""
+	default lDbStruct := .f.
+
+	for nFields   := 1 to len(aFields)
+		cField := aFields[nFields]
+
+		if lDbStruct
+			cField := cField[1]
+		endif
+
+		oJson[cField] := nFields
+	next nFields
+return oJson
+/*/{Protheus.doc} IPJson::compare
+Realiza a comparação de 2 objetos JSON
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 02/09/2024
+@param oJson1, object, Objeto JSON 1
+@param oJson2, object, Ojbeot JSON 2
+@return logical, se true objetos são iguais, se false há diferença ou um ou mais parametros não foram enviadas para comparação
+/*/
+method compare(oJson1,oJson2) class IPJson
+	if valType(oJson1) != "J"
+		return .f.
+	endif
+
+	if valType(oJson2) != "J"
+		return .f.
+	endif
+return oJson1:toJson() == oJson2:toJson()
+/*/{Protheus.doc} IPJson::jsonToArray
+Converte um json em array
+@type method
+@version 12.1.2410
+@author Tiago Faria
+@since 24/03/2024
+@param oJson, json, objeto json a ser convertido em array
+@return array, retorna array com os dados do json recebido Exemplo: JSON = {"A":1,"B":2}, ARRAY RETORNADO: [1,2]
+/*/
+method jsonToArray(oJson) class IPJson
+	local aNames := oJson:getNames()
+	local aLines := {}
+	local nName  := 0
+	local cName  := ""
+
+	for nName := 1 to len(aNames)
+		cName := aNames[nName]
+
+		aAdd(aLines,oJson[cName])
+	next nName
+return aLines
+/*/{Protheus.doc} IPJson::groupBy
+Agrupa os dados de um array de json
+@type method
+@version 12.1.2410
+@author Tiago Faria
+@since 24/03/2025
+@param aJson, array, Array de json
+@param aKeyGroup, array, array com as chaves que devem ser agrupadas
+@return json, Json com os dados agrupados
+/*/
+method groupBy(aJson,aKeyGroup) class IPJson
+	local oJsonGroup := JsonObject():New()
+	local cKey       := ""
+	local nLine      := 0
+	local nKey       := 0
+	local oLine      := nil
+	local aLineGroup := {}
+
+	for nLine := 1 to len(aJson)
+		oLine := aJson[nLine]
+		cKey := ""
+
+		for nKey := 1 to len(aKeyGroup)
+			cKey += alltrim(alltochar(oLine[akeyGroup[nKey]]))
+		next nKey
+
+		aLineGroup := IPJson():getArray(cKey,oJsonGroup)
+		aAdd(aLineGroup,oLine)
+	next nLine
+
+return oJsonGroup
+/*/{Protheus.doc} IPJson::toArrayExecAuto
+Converte JSON na estrutura de um array para execauto
+@type method
+@version 12.1.2410
+@author Tiago Faria
+@since 24/03/2025
+@param oJson, object, Objecto JSON
+@param cTableFwVetByDic, character, Código da tabela para realizar o fwbetbydic caso necessario
+@return array, Retorna array no formado de execauto exemplo: JSON={"C6_PRODUTO": "PA1", "C6_QUANT": 10} ARRAY={{"C6_PRODUTO","PA1",NIL},{"C6_QUANT",10,NIL}}
+/*/
+method toArrayExecAuto(oJson,cTableFwVetByDic) class IPJson
+	local aNames             := oJson:getNames()
+	local aLines             := {}
+	local nName              := 0
+	local cName              := ""
+	default cTableFwVetByDic := ""
+
+	for nName := 1 to len(aNames)
+		cName := aNames[nName]
+
+		aAdd(aLines,{cName,oJson[cName],nil})
+	next nName
+
+	if !empty(cTableFwVetByDic)
+		aLines := FwVetByDic(aLines,cTableFwVetByDic)
+	endif
+return aLines
+/*/{Protheus.doc} IPJson::aliasToJson
+Converte os dados de um alias para um array de JSON
+@type method
+@version 12.1.2410
+@author Tiago Faria
+@since 09/10/2025
+@param cAlias, character, alias que deve ser lido
+@param lQuery, logical, se .t. indica que o alias  proveniente de uma query
+@param lWhile, logical, se .t. indica que a varredura da tabela deve ser feita com while, se .f. com for
+@return array, Retorna um array de JSON com os dados do alias
+/*/
+method aliasToJson(cAlias,lQuery,lWhile) class IPJson
+return u_AliasToJson(cAlias,lQuery,lWhile)
+/*/{Protheus.doc} IPJson::clone
+Realiza o clone de um objeto JSON
+@type method
+@version 12.1.2410
+@author Tiago Faria
+@since 09/10/2025
+@param jJson, json, objeto json que deve ser clonado
+@return json, Retorna o clone do objeto JSON
+/*/
+method clone(jJson) class IpJson
+	local jClone := JsonObject():new()
+	local aFields := jJson:getNames()
+	local nFields := 0
+
+	if valType(jJson) <> 'J'
+		return jJson
+	endif
+
+	aFields := jJson:getNames()
+
+	for nFields := 1 to len(aFields)
+		cField := aFields[nFields]
+
+		jClone[cField] := jJson[cField]
+	next nFields
+
+return jClone
+/*/{Protheus.doc} IPJson::merge
+Realiza o merge de 2 objetos JSON
+@type method
+@version 12.1.2410
+@author Tiago Faria
+@since 09/10/2025
+@param jJSON1, json, objeto json 1
+@param jJSON2, json, objeto json 2
+@return json, Retorna o merge dos 2 objetos JSON
+/*/
+method merge(jJSON1,jJSON2) class IPJson
+	local aFields := jJSON2:getNames()
+	local nField := 0
+	local cField := ""
+	local nFields := len(aFields)
+	local jMerge := JsonObject():new()
+
+	aFields := jJSON1:getNames()
+	nFields := len(aFields)
+	for nField := 1 to nFields
+		cField := aFields[nField]
+		jMerge[cField] := jJSON1[cField]
+	next nField
+
+	aFields := jJSON2:getNames()
+	nFields := len(aFields)
+	for nField := 1 to nFields
+		cField := aFields[nField]
+		jMerge[cField] := jJSON2[cField]
+	next nField
+
+return jMerge
+/*/{Protheus.doc} IPJson::toExcel
+Exporta um array de json para uma planilha excel
+@type method
+@version 12.1.2410
+@author Tiago Faria
+@since 09/10/2025
+@param aLines, array, Array de json
+@param cPath, character, Path onde o arquivo deve ser salvo
+@param cName, character, Nome do arquivo
+@param cSheetName, character, Nome da Planilha
+@param lImpHeader, logical, se .t. indica que deve ser impresso o cabecalho
+@param lOpen, logical, se .t. indica que deve abrir o arquivo no final
+/*/
+method toExcel(aLines,cPath,cName,cSheetName,lImpHeader,lOpen) class IPJson
+	local nDados 		:= 0
+	local oIPXlsxJson 	:= nil	//IPXlsxJson():New(cArquivo)
+
+	default cSheetName 	:= "Planilha1"
+	default aLines 		:= {}
+	default cPath 		:= getTempPath()
+	default cName 		:= "ipjson_toexcel"
+
+	oIPXlsxJson := IPXlsxJson():New(cPath + cName)
+	oIPXlsxJson:export(aLines,cSheetName,lImpHeader)
+	oIPXlsxJson:generateXlsx(lOpen)
+return

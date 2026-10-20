@@ -1,0 +1,408 @@
+#include 'tlpp-core.th'
+#include 'FWMVCDEF.CH'
+#include 'tlpp-rest.th'
+
+namespace IntegrationFracttal
+
+#define INCLUI 3
+#define ALTERA 4
+#define DELETE 5
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} ProcessaMVCAPIProtheusData
+	Classe responsavel por consultar, incluir, alterar ou excluir registro via MVC
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Class ProcessaMVCAPIProtheusData
+	public data aHeader				as array
+	public data aItems				as array
+    public data cBranch				as character
+    public data cTabHeader			as character
+    public data cTabItems			as character
+    public data nOperation			as numeric
+    public data nModelo			    as numeric
+    public data cFieldDelete		as character
+    public data cIDDelete			as character
+    public data lHasIDDelte 		as logical
+    public data oHashFieldsHeader	as object
+    public data oHashFieldsItem		as object
+    public data oStatement			as object
+
+    protected data cError as character
+
+    public method new() as object
+	public method destroy() as variant
+	public method clean() as variant
+	public method setHeader() as variant
+	public method setItems() as variant
+	public method setItem() as array
+	public method getDataHeader() as array
+	public method getDataaItems() as array
+	public method getErrorMessage() as character
+    public method setErrorMessage() as variant
+    public method setOperation() as logical
+	public method setIDDelete() as logical
+	public method fromExecAuto() as logical
+	//public method commitData() as logical
+
+	protected method addMapFieldsHeader() as logical
+	protected method addMapFieldsItem() as logical
+	//protected method setCustomFields()
+EndClass
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} new
+	Método NEW, para inicialização da classe
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method new(cTable as Character, nOperation as Numeric) as Object Class ProcessaMVCAPIProtheusData
+	::cBranch := FwXFilial( cTable )
+    ::nOperation := nOperation
+	::lHasIDDelte := .F.
+Return Self
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} setOperation
+	Define o código da operação a ser executada
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method setOperation(nOperation as Numeric) as Logical Class ProcessaMVCAPIProtheusData
+	Local lRet := .T. as Logical
+
+	If nOperation >= INCLUI .And. nOperation <= DELETE
+		::nOperation := nOperation
+	Else
+		::setErrorMessage( "Tipo de operação invalido", .T. )
+		lRet := .F.
+	Endif
+Return lRet
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} getErrorMessage
+	Retorna mensagem de erro, gravado na variável cError
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method getErrorMessage() as Character Class ProcessaMVCAPIProtheusData
+Return ::cError
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} setErrorMessage
+	Grava mensagem de erro, disponibilizando na variável cError
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method setErrorMessage(cError as Character, lIsForce as Logical) Class ProcessaMVCAPIProtheusData
+	If Empty(::cError) .Or. lIsForce
+		::cError := cError
+	Else
+		::cError += cError
+	Endif
+Return Nil
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} setIDDelete
+	Grava o ID do documento a ser estornado, enviado via parâmetro cIDDelete
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method setIDDelete(cFieldDelete as character, cIDDelete as Character, lIsForce as Logical) as logical Class ProcessaMVCAPIProtheusData
+    Local lRet  := .F. as Logical
+	
+	If (!Empty(cFieldDelete) .And. !Empty(cIDDelete)) .Or. lIsForce
+		::cFieldDelete := cFieldDelete
+		::cIDDelete := cIDDelete
+		::lHasIDDelte := .T.
+		lRet := .T.
+	Endif
+Return lRet
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} addMapFieldsHeader
+	Adiciona mapa de campos do cabeçalho a ser considerado nas validações
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method addMapFieldsHeader(oHashFields as object, cTabela as character) as Logical Class ProcessaMVCAPIProtheusData
+    Local lRet  := .T. as Logical
+    
+    If ( oHashFields <> NIL )
+        ::oHashFieldsHeader := oHashFields
+        ::cTabHeader := cTabela
+        ::nModelo := 1
+    Else
+        lRet := .F.
+        ::setErrorMessage("Objeto oHashFields esta em branco")
+    EndIF
+
+Return lRet
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} addMapFieldsItem
+	Adiciona mapa de campos dos itens a ser considerado nas validações
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method addMapFieldsItem(oHashFields as object, cTabela as character) as Logical Class ProcessaMVCAPIProtheusData
+    Local lRet  := .T. as Logical
+    
+    If ( oHashFields <> NIL )
+        ::oHashFieldsItem := oHashFields
+        ::cTabItems := cTabela        
+        ::nModelo := 3
+    Else
+        lRet := .F.
+        ::setErrorMessage("Objeto oHashFields esta em branco")
+    EndIF
+
+Return lRet
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} setHeader
+	Define array de cabeçalho, com base no JSON enviado por parâmetro
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method setHeader(jBody as Json) Class ProcessaMVCAPIProtheusData
+	Local aFieldsHeader as Array
+	Local jHeader		as Json
+	Local nField		as Integer
+	Local cField		as Character
+	Local xValue		as variant
+
+	jHeader := jBody:GetJsonObject("header")
+	aFieldsHeader := jHeader:GetNames()
+
+	For nField := 1 To Len( aFieldsHeader )
+		If ::oHashFieldsHeader:Get( aFieldsHeader[nField] , @cField )
+			xValue := tgv.util.ConvertValue(jHeader:GetJsonObject(aFieldsHeader[nField]), GetSx3Cache(cField, "X3_TIPO"))
+            
+            aAdd(::aHeader, {cField, xValue, Nil})			
+		Endif
+	Next nField
+
+	::aHeader := FwVetByDic(::aHeader, ::cTabHeader, .F.)
+
+	FreeObj(jHeader)
+Return Nil
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} setItems
+	Define array de itens, com base no JSON enviado por parâmetro
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method setItems(jBody as Json, cCampoLinPos as character) Class ProcessaMVCAPIProtheusData
+	Local aItems		as Array
+	Local aItem			as Array
+	Local aItemsClone   as Array
+	Local cAutDeleta	as Character
+	Local cLinPos		as Character
+	Local nAutdeleta	as Numeric
+	Local nItem			as Integer
+	Local nLinpos		as Numeric	
+
+	aItems := jBody:GetJsonObject("items")
+
+	For nItem := 1 To Len(aItems)
+		aItem := ::setItem(aItems[nItem])
+		aAdd(::aItems, aClone(aItem))
+		aSize(aItem, 0)
+	Next
+
+	aItemsClone := aClone(::aItems)
+	::aItems := FwVetByDic(::aItems, ::cTabItems, .T.)
+
+	If ::nOperation == ALTERA
+		For nItem := 1 to Len(::aItems)
+			nLinpos := aScan(aItemsClone[nItem], {|x| x[1] == "LINPOS"})
+			nAutdeleta := aScan(aItemsClone[nItem], {|x| x[1] == "AUTDELETA"})
+			If nLinpos > 0 .And. nAutdeleta > 0
+				cLinPos := aItemsClone[nItem, nLinpos, 3]
+				cAutDeleta := aItemsClone[nItem, nAutdeleta, 2]
+				
+				aAdd(::aItems[nItem], {"LINPOS"		, cCampoLinPos, cLinPos})
+				aAdd(::aItems[nItem], {"AUTDELETA"	, cAutDeleta, NIL})
+			EndIf
+		Next
+	EndIf
+
+	aSize(aItems, 0)
+Return Nil
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} setItem
+	Processa item unitáriamente, tratando o conteudo do mesmo
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method setItem(jItem as Json, cTypeOperation as Character, cBranchSC6 as Character) as Array Class ProcessaMVCAPIProtheusData
+	Local aArea			:= GetArea() as Array
+	Local aFieldsItem 	as Array
+	Local aItem			:= {} as Array
+	Local cField		as Character
+	Local nField		as Integer
+	Local xValue		as variant	
+
+	aFieldsItem := jItem:GetNames()
+
+	For nField := 1 To Len( aFieldsItem )
+		If ::oHashFieldsItem:Get( aFieldsItem[nField] , @cField )
+			xValue := tgv.util.ConvertValue(jItem:GetJsonObject(aFieldsItem[nField]), GetSx3Cache(cField, "X3_TIPO"))
+            
+            aAdd(aItem, {cField, xValue, Nil})			
+		Endif
+	Next nField
+
+	aItem := FwVetByDic(aItem, ::cTabItems, .F.)
+
+	FreeObj(jItem)
+	RestArea(aArea)
+Return aItem
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} fromExecAuto
+	Tratamento para execução via rotina automática, processando a criação do
+    cabeçalho e item a serem processados
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method fromExecAuto(jBody as Json, cCampoLinPos as character) as Logical Class ProcessaMVCAPIProtheusData
+	Local aArea := FwGetArea() as Array
+	Local lContinue := .T. as Logical
+	
+    ::clean()
+
+	If ( ::nOperation == DELETE .And. ::lHasIDDelte )
+		If !Empty( ::cFieldDelete ) .And. !Empty( ::cIDDelete )
+			aAdd(::aHeader, {::cFieldDelete, ::cIDDelete, Nil})
+		Else
+			lContinue := .F.
+            ::setErrorMessage("ID do documento a ser estornado nao foi definido")
+		Endif		
+	Else
+		If jBody == Nil
+			lContinue := .F.
+            ::setErrorMessage("Json fornecido na função 'fromExecAuto' esta em branco")
+		Else
+			::setHeader(jBody)            
+            If ( ::nModelo == 3 )
+			    ::setItems(jBody:GetJsonObject("header"))
+            EndIf
+		Endif
+	Endif
+
+	FwrestArea( aArea )
+	aSize(aArea, 0)
+Return lContinue
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} getDataHeader
+	Retorna array da dados tratados do cabeçalho
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method getDataHeader() Class ProcessaMVCAPIProtheusData
+Return ::aHeader
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} getDataaItems
+	Retorna array da dados tratados dos itens
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method getDataaItems() Class ProcessaMVCAPIProtheusData
+Return ::aItems
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} destroy
+	Destroi objetos e array utilizado no processo
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method destroy() Class ProcessaMVCAPIProtheusData
+	::cError := ""
+	
+	If ::oHashFieldsHeader <> Nil 
+		::oHashFieldsHeader:Clean()
+		FreeObj(::oHashFieldsHeader)
+	Endif
+
+	If ::oHashFieldsItem <> Nil 
+		::oHashFieldsItem:Clean()
+		FreeObj(::oHashFieldsItem)
+	Endif
+	
+	If !Empty(::aHeader)
+		aSize(::aHeader, 0)
+		::aHeader := Nil
+	Endif
+
+	If !Empty(::aItems)
+		aSize(::aItems, 0)
+		::aItems := Nil
+	Endif
+Return Nil
+
+//------------------------------------------------------------------------------
+/*/{Protheus.doc} clean
+	Limpa conjuntos de váriaveis a ser utilizadas no processamento
+	@type 		class
+	@version	12.1.27
+	@author		Gabriel Pereira Santos - CRM Services
+	@since		24/01/2024
+/*/
+//------------------------------------------------------------------------------
+Method clean() Class ProcessaMVCAPIProtheusData
+	::aHeader := {}
+	::aItems := {}
+	::cError := ""
+Return Nil

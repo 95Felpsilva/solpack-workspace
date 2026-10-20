@@ -1,0 +1,184 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+
+#define HTTP_BAD_REQUEST            400
+
+namespace IntegracaoLabs
+
+/*/{Protheus.doc} FlowIntegration
+
+Função genérica para concentrar endpoint relacionados a integração com Labs da CRM
+
+@type class
+@author Gabriel Pereira - CRM Services
+@since 04/05/2022
+@version P12
+@database Oracle
+/*/
+User Function IntegracaoLabs()
+	Local lRet := AlwaysTrue()
+
+Return lRet
+
+/*/{protheus.doc} apiGetProducts
+
+Método GET retornando dados de produtos
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira
+@since 23/06/2022
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@GET(endpoint="/IntegracaoLabs/api/v2/products",description="Retorna dados de Produtos")
+User Function apiGetProducts() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegracaoLabs.u_getProducts") )
+		lRet := IntegracaoLabs.u_getProducts(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegracaoLabs.u_getProducts' não encontrada no RPO."
+		libLabs.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiGetCommitment
+
+Método GET retornando dados de empenho de produção
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira
+@since 23/06/2022
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@GET(endpoint="/IntegracaoLabs/api/v2/commitment",description="Retorna empenho de produção")
+User Function apiGetCommitment() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegracaoLabs.u_getCommitment") )
+		lRet := IntegracaoLabs.u_getCommitment(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegracaoLabs.u_getCommitment' não encontrada no RPO."
+		libLabs.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiGetHistoryCommitment
+
+Método GET retornando dados do historico de apontamento de insumo da OP
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira
+@since 23/06/2022
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@GET(endpoint="/IntegracaoLabs/api/v2/historyCommitment",description="Retorna empenho de produção")
+User Function apiGetHistoryCommitment() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegracaoLabs.u_getHistoryCommitment") )
+		lRet := IntegracaoLabs.u_getHistoryCommitment(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegracaoLabs.u_getHistoryCommitment' não encontrada no RPO."
+		libLabs.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiPostMoviment
+
+Método POST para incluir movimentações internas
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira
+@since 23/06/2022
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@POST(endpoint="/IntegracaoLabs/api/v2/moviment",description="Realiza movimentação interna Protheus")
+User Function apiPostMoviment() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegracaoLabs.u_postMoviment") )
+		lRet := IntegracaoLabs.u_postMoviment(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegracaoLabs.u_postMoviment' não encontrada no RPO."
+		libLabs.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiDeleteMoviment
+
+Método de exclusão/estorno para incluir movimentações internas
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira
+@since 23/06/2022
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@DELETE(endpoint="/IntegracaoLabs/api/v2/moviment/:document",description="Realiza estorno da movimentação interna Protheus")
+User Function apiDeleteMoviment() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegracaoLabs.u_deleteMoviment") )
+		lRet := IntegracaoLabs.u_deleteMoviment(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegracaoLabs.u_deleteMoviment' não encontrada no RPO."
+		libLabs.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiGetShift
+
+Método GET para retornar cadastro de turno
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira
+@since 23/06/2022
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@GET(endpoint="/IntegracaoLabs/api/v2/shift",description="Retorna dados do cadastro de turno Protheus")
+User Function apiGetShift() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegracaoLabs.u_getShift") )
+		lRet := IntegracaoLabs.u_getShift(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegracaoLabs.u_getShift' não encontrada no RPO."
+		libLabs.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.

@@ -1,0 +1,414 @@
+#include 'totvs.ch'
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+
+/*/{Protheus.doc} AcompanhamentoProducao
+Rest Fluxo de Caixa
+@type class
+@version 12.1.2410
+@author Felipe Silva.
+@since 11/07/2025
+/*/
+class AcompanhamentoProducao
+	public method new()
+	public method GetProdutos() as character
+	public method GetTurnos() as character
+	public method GetFiltrar() as character
+
+	@Get("/solpack/lista-produtos-monitor")
+	public method ListaProdutos() as logical
+
+    @Get("/solpack/lista-turnos-monitor")
+	public method ListaTurnos() as logical
+
+    @Post("/solpack/filtrar-monitor")
+	public method FiltrarMonitor() as logical
+endclass
+
+/*/{Protheus.doc} AcompanhamentoProducao::new
+Método construtor da classe
+@type method
+@version 12.1.2410
+@author Felipe Silva
+@since 11/07/2025
+@return object, retorna a instancia da classe
+/*/
+method new() class AcompanhamentoProducao
+return self
+
+/*/{Protheus.doc} AcompanhamentoProducao::ListaProdutos
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 11/07/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method ListaProdutos() as logical class AcompanhamentoProducao
+	local jResponse	:= JSonObject():New()
+	local jAux	    := JSonObject():New()
+	local cAlias    := ::GetProdutos()
+    local aProdutos := {}
+
+    while (cAlias)->(!Eof())
+        jAux            := JSonObject():New()
+	    jAux['value']   := AllTrim((cAlias)->B1_COD)
+	    jAux['label']   := AllTrim((cAlias)->B1_DESC)
+
+        aAdd(aProdutos, jAux)
+
+        (cAlias)->(DbSkip())
+    enddo
+
+    jResponse["items"] 		:= aProdutos
+    jResponse["hasNext"]	:= .f.
+
+	oRest:SetResponse(jResponse:ToJson())
+
+    (cAlias)->(DbCloseArea())
+return .t.
+
+method GetProdutos() as character class AcompanhamentoProducao
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT DISTINCT" + CRLF
+    cQuery += "    B1_COD," + CRLF
+    cQuery += "    B1_DESC" + CRLF
+
+    cQuery += "FROM " + RetSqlTab("SC2") + "" + CRLF
+
+    cQuery += "INNER JOIN " + RetSqlTab("SB1") + "" + CRLF
+    cQuery += "    ON 1 = 1" + CRLF
+    cQuery += "    AND SB1.B1_FILIAL = '" + FWxFilial("SB1") + "'" + CRLF
+    cQuery += "    AND SB1.B1_COD = SC2.C2_PRODUTO" + CRLF
+    cQuery += "    AND SB1.D_E_L_E_T_ = ' '" + CRLF
+
+    cQuery += "WHERE" + CRLF
+    cQuery += "    1 = 1" + CRLF
+    cQuery += "    AND SC2.C2_FILIAL = '" + FWxFilial("SC2") + "'" + CRLF
+    cQuery += "    AND SC2.C2_DATRF = ' '" + CRLF
+    cQuery += "    AND SC2.D_E_L_E_T_ = ' '" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+/*/{Protheus.doc} AcompanhamentoProducao::ListaTurnos
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 11/07/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method ListaTurnos() as logical class AcompanhamentoProducao
+	local jResponse	:= JSonObject():New()
+	local jAux	    := JSonObject():New()
+	local cAlias    := ::GetTurnos()
+    local aTurnos := {}
+
+    while (cAlias)->(!Eof())
+        jAux            := JSonObject():New()
+	    jAux['value']   := AllTrim((cAlias)->ZZ7_ID)
+	    jAux['label']   := AllTrim((cAlias)->ZZ7_DESC)
+
+        aAdd(aTurnos, jAux)
+
+        (cAlias)->(DbSkip())
+    enddo
+
+    jResponse["items"] 		:= aTurnos
+    jResponse["hasNext"]	:= .f.
+
+	oRest:SetResponse(jResponse:ToJson())
+
+    (cAlias)->(DbCloseArea())
+return .t.
+
+method GetTurnos() as character class AcompanhamentoProducao
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT " + CRLF
+    cQuery += "    ZZ7_ID," + CRLF
+    cQuery += "    ZZ7_DESC" + CRLF
+
+    cQuery += "FROM " + RetSqlTab("ZZ7") + "" + CRLF
+
+    cQuery += "WHERE" + CRLF
+    cQuery += "    1 = 1" + CRLF
+    cQuery += "    AND ZZ7.ZZ7_FILIAL = '" + FWxFilial("ZZ7") + "'" + CRLF
+    cQuery += "    AND ZZ7.ZZ7_MSBLQL <> '1'" + CRLF
+    cQuery += "    AND ZZ7.D_E_L_E_T_ = ' '" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+/*/{Protheus.doc} AcompanhamentoProducao::ListaTurnos
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 11/07/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method FiltrarMonitor() as logical class AcompanhamentoProducao
+    local cJson 	    := oRest:getBodyRequest()
+    local oJSON         := JsonObject():new()
+	local jResponse	    := JSonObject():New()
+	local jAux	        := JSonObject():New()
+	local cAlias        := ""
+    local aItems        := {}
+    local cInMaquinas   := ""
+    local cInProdutos   := ""
+    local cInTurnos     := ""
+
+    oJson:FromJson(cJson)
+
+    cInMaquinas := GetInJson(oJson['maquinas'])
+    cInProdutos := GetInJson(oJson['produtos'])
+    cInTurnos := GetInJson(oJson['turnos'])
+    cDeProducao := oJson['producaoDe']
+    cAteProducao := oJson['producaoAte']
+
+    cAlias := ::GetFiltrar(cInMaquinas, cInProdutos, cInTurnos, cDeProducao, cAteProducao)
+
+    while (cAlias)->(!Eof())
+        jAux                            := JSonObject():New()
+	    jAux['maquina']                 := AllTrim((cAlias)->H1_DESCRI)
+	    jAux['produto']                 := AllTrim((cAlias)->B1_DESC)
+	    jAux['tear']                    := Alltrim(Transform((cAlias)->PRODUCAO_TEAR, "@E 999,999,999.99"))
+	    jAux['balanca']                 := Alltrim(Transform((cAlias)->PRODUCAO_BALANCA, "@E 999,999,999.99"))
+	    jAux['turno']                   := AllTrim((cAlias)->TURNO)
+	    //jAux['saldo']                   := (cAlias)->SALDO_EM_ANDAMENTO
+        jAux['totalUnidade']			:= (cAlias)->TOTAL_OP_UNIDADE
+		jAux['saldoUnidade']			:= (cAlias)->SALDO_OP_UNIDADE
+		jAux['qtd_produzida_unidade']	:= (cAlias)->QTD_UNIDADE_PRODUZIDA
+
+        aAdd(aItems, jAux)
+
+        (cAlias)->(DbSkip())
+    enddo
+
+    jResponse["items"] 		:= aItems
+    jResponse["hasNext"]	:= .f.
+
+	oRest:SetResponse(jResponse:ToJson())
+
+    (cAlias)->(DbCloseArea())
+return .t.
+
+static function GetInJson(aAux)
+    local cRet  := ""
+    local nI    := 0
+
+    for nI := 1 to Len(aAux)
+        if !Empty(cRet)
+            cRet += ","
+        endif
+
+        cRet += "'" + aAux[nI] + "'"
+    next nI
+return cRet
+
+method GetFiltrar(cInMaquinas, cInProdutos, cInTurnos, cDeData, cAteData) as character class AcompanhamentoProducao
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT" + CRLF
+    cQuery += "    SH1.H1_DESCRI AS H1_DESCRI," + CRLF
+    cQuery += "    SB1.B1_DESC AS B1_DESC," + CRLF
+    cQuery += "    SH6.H6_ZZTURNO AS TURNO," + CRLF
+    cQuery += "    SUM(COALESCE(SH6.H6_QTDPROD, 0)) AS PRODUCAO_TEAR," + CRLF
+    cQuery += "    SUM(COALESCE(SH6.H6_ZQTPRO2, 0)) AS PRODUCAO_BALANCA," + CRLF
+    cQuery += "    CASE" + CRLF
+    cQuery += "        WHEN" + CRLF
+    cQuery += "            SB1.B1_TIPCONV = 'M'" + CRLF
+    cQuery += "        THEN" + CRLF
+    cQuery += "            SUM(COALESCE(SC2.C2_QUANT, 0)) / SB1.B1_QE" + CRLF
+    cQuery += "        WHEN" + CRLF
+    cQuery += "            SB1.B1_TIPCONV = 'D'" + CRLF
+    cQuery += "        THEN" + CRLF
+    cQuery += "            SUM(COALESCE(SC2.C2_QUANT, 0)) * SB1.B1_QE" + CRLF
+    cQuery += "    END AS TOTAL_OP_UNIDADE," + CRLF
+    cQuery += "    CASE" + CRLF
+    cQuery += "        WHEN" + CRLF
+    cQuery += "            SB1.B1_TIPCONV = 'M'" + CRLF
+    cQuery += "        THEN" + CRLF
+    cQuery += "            SUM(COALESCE(SH6_PROD.H6_QTDPROD, 0)) / SB1.B1_QE" + CRLF
+    cQuery += "        WHEN" + CRLF
+    cQuery += "            SB1.B1_TIPCONV = 'D'" + CRLF
+    cQuery += "        THEN" + CRLF
+    cQuery += "            SUM(COALESCE(SH6_PROD.H6_QTDPROD, 0)) * SB1.B1_QE" + CRLF
+    cQuery += "    END AS QTD_UNIDADE_PRODUZIDA," + CRLF
+    cQuery += "    CASE" + CRLF
+    cQuery += "        WHEN" + CRLF
+    cQuery += "            SB1.B1_TIPCONV = 'M'" + CRLF
+    cQuery += "        THEN" + CRLF
+    cQuery += "            (SUM(COALESCE(SC2.C2_QUANT, 0)) / SB1.B1_QE) - (SUM(COALESCE(SH6_PROD.H6_QTDPROD, 0)) / SB1.B1_QE)" + CRLF
+    cQuery += "        WHEN" + CRLF
+    cQuery += "            SB1.B1_TIPCONV = 'D'" + CRLF
+    cQuery += "        THEN" + CRLF
+    cQuery += "            (SUM(COALESCE(SC2.C2_QUANT, 0)) * SB1.B1_QE) - (SUM(COALESCE(SH6_PROD.H6_QTDPROD, 0)) * SB1.B1_QE)" + CRLF
+    cQuery += "    END AS SALDO_OP_UNIDADE" + CRLF
+
+    cQuery += "FROM " + RetSqlTab("SH6") + "" + CRLF
+
+    cQuery += "INNER JOIN " + RetSqlTab("SH1") + "" + CRLF
+    cQuery += "    ON 1 = 1" + CRLF
+    cQuery += "    AND SH1.H1_FILIAL = '" + FWxFilial("SH1")+ "'" + CRLF
+    cQuery += "    AND SH1.H1_CODIGO = SH6.H6_RECURSO" + CRLF
+    cQuery += "    AND SH1.D_E_L_E_T_ = ' '" + CRLF
+
+    cQuery += "INNER JOIN " + RetSqlTab("SB1") + "" + CRLF
+    cQuery += "    ON 1 = 1" + CRLF
+    cQuery += "    AND SB1.B1_FILIAL = '" + FWxFilial("SB1") + "'" + CRLF
+    cQuery += "    AND SB1.B1_COD = SH6.H6_PRODUTO" + CRLF
+    cQuery += "    AND SB1.D_E_L_E_T_ = ' '" + CRLF
+
+    cQuery += "INNER JOIN " + RetSqlTab("SC2") + "" + CRLF
+    cQuery += "    ON 1 = 1" + CRLF
+    cQuery += "    AND SC2.C2_FILIAL = '" + FWxFilial("SC2") + "'" + CRLF
+    cQuery += "    AND SC2.C2_NUM + SC2.C2_ITEM + SC2.C2_SEQUEN = SH6.H6_OP" + CRLF
+    cQuery += "    AND SC2.D_E_L_E_T_ = ' '" + CRLF
+
+    cQuery += "OUTER APPLY (" + CRLF
+    cQuery += "    SELECT" + CRLF
+    cQuery += "        SUM(SH601.H6_QTDPROD) AS H6_QTDPROD" + CRLF
+    cQuery += "    FROM " + RetSqlName("SH6") + " SH601" + CRLF
+    cQuery += "    WHERE" + CRLF
+    cQuery += "        1 = 1" + CRLF
+    cQuery += "        AND SH601.H6_FILIAL = '" + FWxFilial("SH6") + "'" + CRLF
+    cQuery += "        AND SH601.R_E_C_N_O_ = SH6.R_E_C_N_O_" + CRLF
+    cQuery += "        AND SH601.H6_OPERAC = '01'" + CRLF
+    cQuery += "        AND SH601.D_E_L_E_T_ = ' '" + CRLF
+    cQuery += ") SH6_PROD" + CRLF
+
+    cQuery += "WHERE" + CRLF
+    cQuery += "    1 = 1" + CRLF
+    cQuery += "    AND SH6.H6_FILIAL = '" + FWxFilial("SH6") + "'" + CRLF
+    //cQuery += "    --AND SH6.H6_OP = :OP" + CRLF
+    if !Empty(cInMaquinas)
+        cQuery += "    AND SH6.H6_RECURSO IN (" + cInMaquinas + ")" + CRLF
+    endif
+
+    if !Empty(cInProdutos)
+        cQuery += "    AND SH6.H6_PRODUTO IN (" + cInProdutos + ")" + CRLF
+    endif
+
+    if !Empty(cInTurnos)
+        cQuery += "    AND SH6.H6_ZZTURNO IN (" + cInTurnos + ")" + CRLF
+    endif
+
+    if !Empty(cDeData) .and. !Empty(cAteData)
+        cQuery += "     AND SH6.H6_DTAPONT BETWEEN '" + DToS(CToD(cDeData)) +  "' AND '" + DToS(CToD(cAteData)) + "'" + CRLF
+    endif
+
+    //cQuery += "    AND SH6.H6_OPERAC = '01'" + CRLF
+    cQuery += "    AND SH6.D_E_L_E_T_ = ' '" + CRLF
+
+    cQuery += "GROUP BY" + CRLF
+    cQuery += "    SB1.B1_DESC," + CRLF
+    cQuery += "    SH1.H1_DESCRI," + CRLF
+    cQuery += "    SH6.H6_ZZTURNO," + CRLF
+    cQuery += "    SB1.B1_TIPCONV," + CRLF
+    cQuery += "    SB1.B1_QE" + CRLF
+
+    cQuery += "ORDER BY" + CRLF
+    cQuery += "    SH1.H1_DESCRI," + CRLF
+    cQuery += "    SB1.B1_DESC," + CRLF
+    cQuery += "    SH6.H6_ZZTURNO" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+/*
+method GetFiltrar(cInMaquinas, cInProdutos, cInTurnos, cDeData, cAteData) as character class AcompanhamentoProducao
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT" + CRLF
+    cQuery += "    SH1.H1_DESCRI," + CRLF
+	cQuery += "    SB1.B1_DESC," + CRLF
+	cQuery += "    MAX(SH6_01.H6_ZZTURNO) AS TURNO," + CRLF
+	cQuery += "    SUM(SH6TEAR.SOMATEAR) AS PRODUCAO_TEAR," + CRLF
+	cQuery += "    COALESCE(SUM(H6BALANCA.PRODBALANCA), 0) AS PRODUCAO_BALANCA," + CRLF
+	cQuery += "    COALESCE(SUM(SH6TEAR.SOMATEAR), 0) - COALESCE(SUM(H6BALANCA.PRODBALANCA), 0) AS SALDO_EM_ANDAMENTO" + CRLF
+
+    cQuery += "FROM " + RetSqlName("SH6") + " SH6_01" + CRLF
+
+    cQuery += "OUTER APPLY (" + CRLF
+    cQuery += "    SELECT " + CRLF
+    cQuery += "        SUM(SH6_02.H6_QTDPROD) SOMATEAR " + CRLF
+    cQuery += "    FROM " + RetSqlName("SH6") + " SH6_02" + CRLF
+    cQuery += "        WHERE 1 = 1" + CRLF
+    cQuery += "        AND SH6_01.H6_FILIAL = SH6_02.H6_FILIAL" + CRLF
+    cQuery += "        AND SH6_01.H6_PRODUTO = SH6_02.H6_PRODUTO" + CRLF
+    cQuery += "        AND SH6_01.H6_OP = SH6_02.H6_OP" + CRLF
+    cQuery += "        AND SH6_02.D_E_L_E_T_ = ''" + CRLF
+    cQuery += "        AND SH6_02.H6_OPERAC = '01'" + CRLF
+    cQuery += ") SH6TEAR" + CRLF
+
+    cQuery += "INNER JOIN " + RetSqlTab("SH1") + "" + CRLF
+    cQuery += "    ON 1 = 1" + CRLF
+    cQuery += "    AND SH1.H1_CODIGO = SH6_01.H6_RECURSO" + CRLF
+    cQuery += "    AND SH1.H1_FILIAL = SH6_01.H6_FILIAL" + CRLF
+    cQuery += "    AND SH1.D_E_L_E_T_=''" + CRLF
+
+    cQuery += "INNER JOIN " + RetSqlTab("SB1") + "" + CRLF
+    cQuery += "    ON 1=1" + CRLF
+    cQuery += "    AND SB1.B1_FILIAL = '    '" + CRLF
+    cQuery += "    AND SB1.B1_COD = SH6_01.H6_PRODUTO " + CRLF
+    cQuery += "    AND SB1.D_E_L_E_T_ = ''" + CRLF
+
+    cQuery += "OUTER APPLY (" + CRLF
+    cQuery += "        SELECT " + CRLF
+    cQuery += "            SUM(SH6_SUM02.H6_QTDPROD) AS PRODBALANCA " + CRLF
+    cQuery += "        FROM " + RetSqlName("SH6") + " SH6_SUM02 (NOLOCK)" + CRLF
+    cQuery += "        WHERE" + CRLF
+    cQuery += "             1 = 1" + CRLF
+    cQuery += "             AND SH6_SUM02.H6_FILIAL = SH6_01.H6_FILIAL" + CRLF
+    cQuery += "             AND SH6_SUM02.H6_PRODUTO = SH6_01.H6_PRODUTO" + CRLF
+    cQuery += "             AND SH6_SUM02.H6_OP = SH6_01.H6_OP" + CRLF
+    cQuery += "             AND SH6_SUM02.H6_OPERAC = '02'" + CRLF
+    cQuery += "             AND SH6_SUM02.D_E_L_E_T_ = ' '" + CRLF
+    cQuery += ") H6BALANCA" + CRLF
+
+    cQuery += "WHERE" + CRLF
+    cQuery += "    1 = 1" + CRLF
+    cQuery += "    AND SH6_01.H6_FILIAL = '" + FWxFilial("SH6") + "'" + CRLF
+    //cQuery += "    --AND SH6_01.H6_OP = :OP" + CRLF
+    if !Empty(cInMaquinas)
+        cQuery += "    AND SH6_01.H6_RECURSO IN (" + cInMaquinas + ")" + CRLF
+    endif
+
+    if !Empty(cInProdutos)
+        cQuery += "    AND SH6_01.H6_PRODUTO IN (" + cInProdutos + ")" + CRLF
+    endif
+
+    if !Empty(cInTurnos)
+        cQuery += "    AND SH6_01.H6_ZZTURNO IN (" + cInTurnos + ")" + CRLF
+    endif
+
+    if !Empty(cDeData) .and. !Empty(cAteData)
+        cQuery += "     AND SH6_01.H6_DTAPONT BETWEEN '" + DToS(CToD(cDeData)) +  "' AND '" + DToS(CToD(cAteData)) + "'" + CRLF
+    endif
+
+    cQuery += "    AND SH6_01.H6_OPERAC = '01'" + CRLF
+    cQuery += "    AND SH6_01.D_E_L_E_T_ = ' '" + CRLF
+
+    cQuery += "GROUP BY " + CRLF
+    cQuery += "    SH1.H1_DESCRI, " + CRLF
+    cQuery += "    SB1.B1_DESC" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+*/

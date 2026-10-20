@@ -1,0 +1,143 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+
+#define HTTP_BAD_REQUEST	400
+
+namespace IntegrationFracttal
+
+/*/{protheus.doc} apiGetProducts
+
+Método GET para consulta do cadastro de produtos
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira - CRM Services
+@since 24/01/2024
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@GET(endpoint="/IntegrationFracttal/products",description="Realiza consulta do cadastro de Produtos")
+User Function apiGetProducts() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegrationFracttal.u_getProducts") )
+		lRet := IntegrationFracttal.u_getProducts(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegrationFracttal.u_getProducts' não encontrada no RPO."
+		IntegrationFracttal.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiGetStockBalance
+
+Método GET para saldo em estoque por produto
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira - CRM Services
+@since 24/01/2024
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@GET(endpoint="/IntegrationFracttal/stockBalance",description="Realiza consulta de saldo em estoque por produto")
+User Function apiGetStockBalance() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegrationFracttal.u_getStockBalance") )
+		lRet := IntegrationFracttal.u_getStockBalance(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegrationFracttal.u_getStockBalance' não encontrada no RPO."
+		IntegrationFracttal.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiPostRequestWarehouse
+
+Método POST para realizar solicitação ao armazém via rotina automática MATA105
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira - CRM Services
+@since 24/01/2024
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@POST(endpoint="/IntegrationFracttal/requestWarehouse",description="Realiza solicitação ao armazem via rotina automatica MATA105")
+User Function apiPostRequestWarehouse() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegrationFracttal.u_postRequestWarehouse") )
+		lRet := IntegrationFracttal.u_postRequestWarehouse(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegrationFracttal.u_postRequestWarehouse' não encontrada no RPO."
+		IntegrationFracttal.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiGetRequestWarehouse
+
+Método GET para realizar busca de requisição ao armazém (MATA105)
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira - CRM Services
+@since 24/01/2024
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@GET(endpoint="/IntegrationFracttal/requestWarehouse",description="Realiza busca de solicitação ao armazém MATA105")
+User Function apiGetRequestWarehouse() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegrationFracttal.u_getRequestWarehouse") )
+		lRet := IntegrationFracttal.u_getRequestWarehouse(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegrationFracttal.u_getRequestWarehouse' não encontrada no RPO."
+		IntegrationFracttal.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.
+
+/*/{protheus.doc} apiPostDevolution
+
+Método POST para realizar devolução de material não utilizado na requisição ao armazém
+Via rotina automatica MATA241
+Usando REST Versão 2.0 com Annotation
+
+@type method
+@author Gabriel Pereira - CRM Services
+@since 27/03/2024
+@version P12
+@database MSSQL
+
+@return logical, lRet - Indica se o processo retornou com sucesso
+/*/
+@POST(endpoint="/IntegrationFracttal/devolution",description="Realizar devolução de material não utilizado na requisição ao armazém via rotina automatica MATA241")
+User Function apiPostDevolution() as logical
+    Local cMsg  	:= "" as character
+    Local lRet  	:= .T. as logical
+	
+	If ( FindFunction("IntegrationFracttal.u_postMoviment") )
+		lRet := IntegrationFracttal.u_postMoviment(,@oRest)
+	Else
+		cMsg := "Função TLPP 'IntegrationFracttal.u_postMoviment' não encontrada no RPO."
+		IntegrationFracttal.u_sendMsgFault(oRest,cMsg, HTTP_BAD_REQUEST)
+	Endif
+
+Return .T.

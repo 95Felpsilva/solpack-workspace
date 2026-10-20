@@ -1,0 +1,133 @@
+#include 'totvs.ch'
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+
+/*/{Protheus.doc} ImprimeFichaTecnica
+Rest retorna documentos
+@type class
+@version 12.1.2410
+@author Felipe Silva.
+@since 24/07/2025
+/*/
+class ImprimeFichaTecnica
+	public method new()
+	public method GetProdutos() as character
+	public method GetTurnos() as character
+	public method GetFiltrar() as character
+
+    @Get("/solpack/abre-ficha-tecnica/:ordem")
+	public method AbreFichaTecnica() as logical
+endclass
+
+/*/{Protheus.doc} ImprimeFichaTecnica::new
+MÃ©todo construtor da classe
+@type method
+@version 12.1.2410
+@author Felipe Silva
+@since 11/07/2025
+@return object, retorna a instancia da classe
+/*/
+method new() class ImprimeFichaTecnica
+return self
+
+/*/{Protheus.doc} ImprimeFichaTecnica::AbreFichaTecnica
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 11/07/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method AbreFichaTecnica() as logical class ImprimeFichaTecnica
+    local jParams               := oRest:getPathParamsRequest()
+    Local oFile 	            := nil
+    local cFullFile             := ""
+    local cJson                 := ""
+    local cFilePrinter          := "impop_" + FwTimeStamp()
+	local lViewPDF              := .t.
+	local lLandscape            := .f.
+    local cDefullPath           := "impressao_ficha_tecnica\"
+    //local cCodEmp               := "01"
+
+    private cOrdem              := jParams['ordem']
+    private lTemFichaTecnica    := .f.
+    private oReport             := nil
+
+    //OpenSm0(, .t.)
+    //RpcClearEnv()
+    //RpcSetEnv(cCodEmp, "0101")
+
+    if Posicione("SC2", 1, FWxFilial("SC2") + cOrdem, "!Eof()")
+        ReportDef(cFilePrinter, lLandscape, lViewPDF, cDefullPath)
+
+        lTemFichaTecnica := impFichaTecnica(@oReport)
+
+        oReport:print()
+    endif
+
+    oFile := FwFileReader():New("/impressao_ficha_tecnica/" + cFilePrinter + ".pdf") // CAMINHO ABAIXO DO ROOTPATH
+
+	// SE FOR POSSÍVEL ABRIR O ARQUIVO, LEIA-O
+	// SE NÃO, EXIBA O ERRO DE ABERTURA
+	if (oFile:Open())
+		cFullFile := oFile:FullRead() // EFETUA A LEITURA DO ARQUIVO
+
+		// RETORNA O ARQUIVO PARA DOWNLOAD
+        oRest:setKeyHeaderResponse('Content-Type','application/pdf')
+		oRest:SetResponse(cFullFile)
+		oFile:Close()
+	else
+		cJson := GetMsgJson("Não foi possivel abrir o arquivo: " + cFilePrinter)
+		SetRestFault(400, cJson)
+	endif
+return .t.
+
+static function GetMsgJson(cMessage,cDetailMessage,cErro)
+	local cJSon	:= ""
+	local oJson := JsonObject():new()
+
+	default cMessage 		:= ""
+	default cDetailMessage 	:= cMessage
+	default cErro 			:= "400"
+
+	oJson['code']			:= cErro
+	oJson['message']		:= cMessage
+	oJson['detailedMessage']:= cDetailMessage
+
+	cJson := oJson:toJson()
+	cJson := FwNoAccent(cJson)
+return cJson
+
+static function impFichaTecnica(oReport)
+    local cAlias := ''
+    local cQuery := ''
+    local lRet   := .f.
+
+    cQuery += "SELECT" + CRLF
+    cQuery += "	CZG_CDAC," + CRLF
+    cQuery += "	CZG_CDRC," + CRLF
+    cQuery += "	CZG_CDMD," + CRLF
+    cQuery += "	MAX(CZG_VRFH) AS CZG_VRFH" + CRLF
+    cQuery += "FROM" + CRLF
+    cQuery += "	" + RetSqlTab('CZG') + CRLF
+    cQuery += "WHERE 1=1" + CRLF
+    cQuery += "	AND " + RetSqlFil('CZG') + CRLF
+    cQuery += "	AND CZG_CDAC = '" + SC2->C2_PRODUTO + "'" + CRLF
+    cQuery += "	AND " + RetSqlDel('CZG') + CRLF
+    cQuery += "GROUP BY CZG_CDAC,CZG_CDRC,CZG_CDMD" + CRLF
+
+    oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+
+    if Posicione("CZG",1,xFilial("CZG")+(cAlias)->(CZG_CDAC+CZG_CDRC+CZG_CDMD+CZG_VRFH),"!Eof()")
+		lRet := .t.
+        u_RelFichaTecnica(oReport)
+    endif
+
+    (cAlias)->(dbCloseArea())
+return lRet
+
+static function ReportDef(cFilePrinter, lLandscape, lViewPDF, cDefullPath)
+	oReport := IpFwMsPrinter():new(cFilePrinter, lLandscape, lViewPDF, cDefullPath)
+return

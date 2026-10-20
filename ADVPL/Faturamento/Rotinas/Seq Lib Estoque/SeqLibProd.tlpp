@@ -1,0 +1,38 @@
+#include 'totvs.ch'
+#include 'FWMVCDEF.ch'
+/*/{Protheus.doc} SeqLibProd
+Exibe tela apenas com a lista de produtos do produto posicionado no grid de Seq Lib do Pedido
+@type function
+@version 12.1.27
+@author Tiago Faria
+@since 25/08/2021
+/*/
+user function SeqLibProd()
+	local oModel     := FwModelActive()
+	local oGrid      := oModel:getModel("MODEL_GRID")
+	local oStruct 	 := oGrid:getStruct()
+	local aRows      := FwSaveRows()
+	local nPosMark   := oStruct:getFieldPos("MARK")
+	local nPosQtdLib := oStruct:getFieldPos("C9_QTDLIB")
+	local nPosLinha  := oStruct:getFieldPos("LINHA")
+	local lConfirmou :=  .f.
+	local nLine      := 0
+	local aDadosProd := {}
+
+	lConfirmou := u_SeqLibPed(.t.,15,@aDadosProd)
+
+	if lConfirmou
+		for nLine := 1 to len(aDadosProd)
+			aProd := aDadosProd[nLine][2]
+			oGrid:goLine(aProd[nPosLinha])
+			if oGrid:getValue("C9_QTDLIB") <> aProd[nPosQtdLib]
+				oGrid:setValue("C9_QTDLIB",aProd[nPosQtdLib])
+				if oGrid:getValue("MARK") <> aProd[nPosMark]
+					oGrid:setValue("MARK",aProd[nPosMark])
+				endif
+			endif
+		next nLine
+	endif
+
+	FwRestRows(aRows)
+return

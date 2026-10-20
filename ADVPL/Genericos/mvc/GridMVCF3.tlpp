@@ -1,0 +1,246 @@
+#include 'totvs.ch'
+
+static aKeyReturn   := {}
+static aKeySelected := {}
+static cIdGrid      := ""
+static buttonCancel := .f.
+/*/{Protheus.doc} GridMVCF3
+Classe para montra um grid MVC para ser utilizado em consultas especificas (SXB)
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+class GridMVCF3
+	data cKeyReturn as character
+	data cOriginDB  as character
+	data xData      as variant
+	data oGrid      as object
+
+	public method new() CONSTRUCTOR
+	public method setKeyReturn()
+	public method setOriginDB()
+	public method setData()
+	public method activate()
+	public method setTitleField()
+	public method destroy()
+	static method getKeySelected()
+endclass
+/*/{Protheus.doc} GridMVCF3::new
+Método construtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+method new() class GridMVCF3
+	::setKeyReturn("")
+	::setOriginDB("")
+	buttonCancel := .f.
+return
+/*/{Protheus.doc} GridMVCF3::activate
+Exibe o grid MVC na tela
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cTitle, character, Define o título da tela
+@return logical, Se true o usuário selecionou o registro se false clicou no botão cancelar
+/*/
+method activate(cTitle) class GridMVCF3
+	local aEnableButtons := {}
+
+	::oGrid:setOnlyView(.t.)
+	::oGrid:setTitle(cTitle)
+	::oGrid:setViewDef({|oView| modifyView(oView)})
+	::oGrid:setModelDef({|oView| modifyModel(oView)})
+	cIdGrid := ::oGrid:getIDGridModel()
+
+	if ::cOriginDB == "JSON"
+		::oGrid:setJson(::xData)
+		//oGrid:addOnlyField("ProcessDescription")
+	elseif ::cOriginDB == "SQL"
+		::oGrid:setQuery(::xData)
+	endif
+
+	aAdd(aEnableButtons ,{.f. ,nil})		 //1 - Copiar
+	aAdd(aEnableButtons ,{.f. ,nil})         //2 - Recortar
+	aAdd(aEnableButtons ,{.f. ,nil})         //3 - Colar
+	aAdd(aEnableButtons ,{.f. ,nil})         //4 - Calculadora
+	aAdd(aEnableButtons ,{.f. ,nil})         //5 - Spool
+	aAdd(aEnableButtons ,{.f. ,nil})         //6 - Imprimir
+	aAdd(aEnableButtons ,{.t. ,'Selecionar'})//7 - Confirmar
+	aAdd(aEnableButtons ,{.t. ,"Cancelar"})  //8 - Cancelar
+	aAdd(aEnableButtons ,{.f. ,nil})         //9 - WalkTrhough
+	aAdd(aEnableButtons ,{.f. ,nil})         //10 - Ambiente
+	aAdd(aEnableButtons ,{.f. ,nil})         //11 - Mashup
+	aAdd(aEnableButtons ,{.f. ,nil})         //12 - Help
+	aAdd(aEnableButtons ,{.f. ,nil})         //13 - Formulário HTML
+	aAdd(aEnableButtons ,{.f. ,nil})         //14 - ECM
+
+	::oGrid:activate(/*nOperation*/,aEnableButtons,/*nPercReducao*/,/*cTitle*/,/*bCloseOnOK*/,/*bOk*/,{||myCancel()}/*bCancel*/)
+return !buttonCancel
+/*/{Protheus.doc} GridMVCF3::setTitleField
+Atribui/Modifica um título a um campo 
+@type method
+@version  12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cId, character, Id do campo
+@param cDescription, character, Descrição do campo
+/*/
+method setTitleField(cId,cDescription) class GridMVCF3
+	::oGrid:setTitleField(cID,cDescription)
+return
+/*/{Protheus.doc} GridMVCF3::setKeyReturn
+Define quais campos deverão ser retornados pela consulta especifica
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cKeyReturn, character, Id do campo a ser retornado pela consulta
+/*/
+method setKeyReturn(cKeyReturn) class GridMVCF3
+	if aScan(aKeyReturn,cKeyReturn) == 0
+		aAdd(aKeyReturn,cKeyReturn)
+	endif
+return
+/*/{Protheus.doc} GridMVCF3::setOriginDB
+Define a origem dos dados JSON,SQL,ARRAY
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cOriginDB, character, Origem dos dados JSON,SQL,ARRAY
+/*/
+method setOriginDB(cOriginDB) class GridMVCF3
+	::cOriginDB := cOriginDB
+
+	if ::cOriginDB == "JSON"
+		::oGrid := GridMVCJson():new()
+	elseif ::cOriginDB == "SQL"
+		::oGrid := GridMVCSQL():new()
+	endif
+return
+/*/{Protheus.doc} GridMVCF3::setData
+Define o conteudo que deverá ser apresentado no Grid onde:
+Se a origem for SQL -> Atribuir o alias da query
+Se a origem for JSON -> Atribuir um array de objetos json
+Se a origem for ARRAY -> Atribuir um array ADVPL com a mesma estrutura do ACOLS da classe MSNEWGETDADOS
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param xData, variant, Define o conteudo que deverá ser apresentado no Grid
+/*/
+method setData(xData) class GridMVCF3
+	::xData := xData
+return
+/*/{Protheus.doc} GridMVCF3::getKeySelected
+Retorna o conteudo do campo que foi selecionado pelo usuário na consulta especifica
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cID, character, ID do campo definido no método GridMVCF3:setKeyReturn
+@return variant, Retorna o conteudo do campo passado por parametro
+/*/
+method getKeySelected(cID) class GridMVCF3
+	local nPos          := aScan(aKeySelected,{|aKey| aKey[1] == cID})
+	local xKeySelected  := ""
+
+	if nPos > 0
+		xKeySelected := aKeySelected[nPos,2]
+		aKeySelected := aDel(aKeySelected,nPos)
+		aSize(aKeySelected,len(aKeySelected)-1)
+		
+		removeKeyReturn(cID)
+	endif
+return xKeySelected
+/*/{Protheus.doc} GridMVCF3::destroy
+Limpa as variaveis utilizada na classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+method destroy() class GridMVCF3
+	aKeyReturn   := {}
+	aKeySelected := {}
+	cIdGrid      := ""
+return
+/*
+Modifica o comportamento da view para ser semelhante a consulta padrão
+Autor: Tiago Faria
+Data: 29/07/2021
+*/
+static function modifyView(oView)
+	local bDoubleClick := {|oFormulario,cFieldName,nLineGrid,nLineModel| closeForm(.t.), .f.}
+
+	oView:showUpdateMsg(.f.)
+	oView:showInsertMsg(.f.)
+	oView:SetCloseOnOK({||.t.})
+	oView:SetViewProperty("VIEW_GRID","GRIDDOUBLECLICK",{bDoubleClick})
+	oView:SetViewProperty("*", "GRIDFILTER",{.t.})
+return oView
+/*
+Modifica o comportamento do model para ser semelhante a consulta padrão
+Autor: Tiago Faria
+Data: 29/07/2021
+*/
+static function modifyModel(oModel)
+	oModel:SetCommit({||closeForm(.t.),.t.})
+return oModel
+/*
+Fecha o formulário MVC
+Autor: Tiago Faria
+Data: 29/07/2021
+*/
+static function closeForm(lSaveKey)
+	local lRet := .t.
+	local oView   := FwViewActive()
+	if lSaveKey
+		savekeySelected()
+	endif
+	oView:lModify := .f.
+	oView:ButtonCancelAction()
+return lRet
+/*
+Salva o conteudo dos campos definidos no método GridMVCF3():SetKeyReturn()
+Autor: Tiago Faria
+Data: 29/07/2021
+*/
+static function savekeySelected()
+	local nKey         := 0
+	local oView := FwViewActive()
+
+	for nKey := 1 to len(aKeyReturn)
+		cField := aKeyReturn[nKey]
+
+		if !empty(cField)
+			aAdd(aKeySelected,{cField,oView:getValue(cIdGrid,cField)})
+		endif
+
+	next nKey
+return
+/*
+Função executada quando o usuário clica no botão cancelar da tela, utilizada para inibir a mensagem de aviso do MVC que os dados serão perdidos caso o usuário confirme o cancelamento da tela
+Autor: Tiago Faria
+Data: 29/07/2021
+*/
+static function myCancel()
+	Local oModel := FWModelActive()
+
+	If (!Empty(oModel))
+		oModel:lModify := .F.
+	EndIf
+	buttonCancel := .t.
+Return .T.
+
+static function removeKeyReturn(cID)
+	local nPos := aScan(aKeyReturn,cID)
+	if nPos > 0
+		aKeyReturn := aDel(aKeyReturn,nPos)
+		aSize(aKeyReturn,len(aKeyReturn)-1)
+	endif
+return

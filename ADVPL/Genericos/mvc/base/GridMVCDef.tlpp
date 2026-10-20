@@ -1,0 +1,381 @@
+#include 'totvs.ch'
+#include "fwmvcdef.ch"
+
+static POS_ID    := 1
+static POS_DEF   := 2
+static LEN_ARRAY := 2
+
+static aGridDef := {}
+/*/{Protheus.doc} GridMVCDef
+Classe com as definições do MVC
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+/*/
+class GridMVCDef
+	data cProgram     as character
+	data oModelDef    as object
+	data oViewDef     as object
+	private data nPercentGrid as numeric
+	private data nPercentForm as numeric 
+
+	public method new() constructor
+	public method getProgram()
+	public method modelDef()
+	public method viewDef()
+	public method setViewDef()
+	public method setModelDef()
+	public method setTitle()
+	public method setOnlyView()
+	public method setShowMarkAll()
+	private method saveDef()
+	static method getDef()
+	static method destroyDef()
+
+	public method activate()
+	public method setTitleField()
+	public method setFieldsTable()
+	public method addFieldTable()
+	public method setMarkField()
+	public method getMarkField()
+	public method getTypeField()
+	public method addTypeField()
+	public method getIDGridModel()
+	public method getIDGridView()
+	public method getBeforeMark()
+	public method setBeforeMark()
+	public method addFWModelEvent()
+	public method setPercentGrid()
+	public method getPercentGrid()
+	public method setPercentForm()
+	public method getPercentForm()
+	public method getModelDef()
+	public method getViewDef()
+return
+
+endclass
+/*/{Protheus.doc} GridMVCDef::new
+Método construtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+/*/
+method new(cIDModel,cProgram,cIDGridModel,cIDGridView,bLoadGrid) class GridMVCDef
+	default cIDModel     := "ZZMVC" + retCodUsr()
+	default cProgram     := ""
+	default cIDGridModel := ""
+	default cIDGridView  := ""
+
+	::cProgram     := cProgram
+
+	::oModelDef    := GridDefModel():new(cIDModel,cIDGridModel)
+	::oModelDef:setLoadGrid(bLoadGrid)
+	::oViewDef     := GridDefView():new(cIDGridView,::cProgram,cIDGridModel)
+
+	::setTitle("Grid")
+return
+/*/{Protheus.doc} GridMVCDef::saveDef
+Salva as definições em memória para posterior utilização durante o carregamento da tela MVC
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+@param oObj, object, Objeto com as definições do MVC
+/*/
+method saveDef(oObj) class GridMVCDef
+	local nPos := getPosDefMVC(::getProgram())
+	default oObj := nil
+
+	aGridDef[nPos][POS_ID] := ::getProgram()
+	aGridDef[nPos][POS_DEF] := oObj
+return
+/*/{Protheus.doc} GridMVCDef::destroyDef
+Destroi as definições salvas em memória
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+/*/
+method destroyDef() class GridMVCDef
+	aGridDef := {}
+return
+/*/{Protheus.doc} GridMVCDef::getDef
+Retorna a definição do MVC referente ao ID informado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cID, character, Id do MVC
+@return object, Retorna as definições do MVC
+/*/
+method getDef(cID) class GridMVCDef
+return getDefMVC(cID)
+/*/{Protheus.doc} GridMVCDef::getProgram
+Retorna o nome do programa utilizado no MVC
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, Nome do programa utilizado no MVC
+/*/
+method getProgram() class GridMVCDef
+return ::cProgram
+/*/{Protheus.doc} GridMVCDef::setTitle
+Atribui um título a tela
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cTitle, character, Titulo da tela
+/*/
+method setTitle(cTitle) class GridMVCDef
+	::oModelDef:setTitle(cTitle)
+return
+/*/{Protheus.doc} GridMVCDef::activate
+Exibe a tela MVC conforme a parametrização do Objeto
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+/*/
+method activate(nOperation,aEnableButtons,nPercReducao,cTitle,bCloseOnOK,bOk,bCancel) class GridMVCDef
+	::saveDef(self)
+return u_gridMVC(::cProgram,cTitle,nOperation,aEnableButtons,nPercReducao,bCloseOnOK,bOk,bCancel)
+
+/*/{Protheus.doc} GridMVCDef::setTitleField
+Atribui titulo a um campo do Grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+@param cIDField, character, ID do campo
+@param cTitle, character, Titulo do Campo
+/*/
+method setTitleField(cIDField,cTitle) class GridMVCDef
+	::oViewDef:setTitleField(cIDField,cTitle)
+return
+/*/{Protheus.doc} GridMVCDef::modelDef
+Retorna as definições do Model
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return object, Retorna as definições do Model
+/*/
+method modelDef() class GridMVCDef
+return ::oModelDef:modelDef()
+/*/{Protheus.doc} GridMVCDef::viewDef
+Retorna as definições da View
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return object, Retorna as definições da view
+/*/
+method viewDef() class GridMVCDef
+return ::oViewDef:viewDef()
+/*/{Protheus.doc} GridMVCDef::setOnlyView
+Indica se a grid será apenas de visualização
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+@param lOnlyView, logical, Se true o grid sera apenas de visualizacao se false o grid poderá ser editivael
+/*/
+method setOnlyView(lOnlyView) class GridMVCDef
+	::oViewDef:setOnlyView(lOnlyView)
+return
+/*/{Protheus.doc} GridMVCDef::setFieldsTable
+Atribui a matriz com os campos que serão utilizados no Grid
+@type method
+@version 12.1.27
+@author Tiago
+@since 29/07/2021
+@param aFieldsTable, array, matriz com os campos que serão utilizados no Grid
+/*/
+method setFieldsTable(aFieldsTable) class GridMVCDef
+	::oModelDef:setFieldsTable(aFieldsTable)
+	::oViewDef:setFieldsTable(aFieldsTable)
+return
+/*/{Protheus.doc} GridMVCDef::addFieldTable
+Adiciona 1 campo na tela que será apresentada no MVC
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cID, character, Id do campo
+@param cType, character, Tipo do campo
+@param nSize, numeric, Tamanho do campo
+@param nDecimal, numeric, Quantidade de decimais do campo
+/*/
+method addFieldTable(cID,cType,nSize,nDecimal) class GridMVCDef
+	local aFieldsModel := ::oModelDef:getFieldsTable()
+	local aFieldsView := ::oViewDef:getFieldsTable()
+	
+	aAdd(aFieldsModel,{cID,cType,nSize,nDecimal})
+	aAdd(aFieldsView,{cID,cType,nSize,nDecimal})
+	
+	::oModelDef:setFieldsTable(aFieldsModel)
+	::oViewDef:setFieldsTable(aFieldsView)
+return
+/*/{Protheus.doc} GridMVCDef::setMarkField
+Definie o campo que será utilizado como mark no grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cField, character, Id do campo que será utilizado como mark
+/*/
+method setMarkField(cField) class GridMVCDef
+	::oModelDef:setMarkField(cField)
+	::oViewDef:setMarkField(cField)
+return
+
+method setShowMarkAll(lMarkAll) class GridMVCDef
+	default lMarkAll := .t.
+
+	::oViewDef:setShowMarkAll(lMarkALl)
+return
+
+/*/{Protheus.doc} GridMVCDef::getMarkField
+Retorna o campo que será utilizado como mark no grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, REtorna o campo que será utilizado como mark no grid
+/*/
+method getMarkField() class GridMVCDef
+return ::oModelDef:getMarkField()
+
+method getTypeField() class GridMVCDef
+return ::oModelDef:getTypeField()
+
+method addTypeField(cField,cTipo,nTamanho,nDecimal) class GridMVCDef
+return ::oModelDef:addTypeField(cField,cTipo,nTamanho,nDecimal)
+/*/{Protheus.doc} GridMVCDef::setViewDef
+Seta bloco de código responável por receber o objeto da View, realizar manipulações e devolver o objeto modificado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param bViewDef, codeblock, bloco de código responável por receber o objeto da View, realizar manipulações e devolver o objeto modificado
+/*/
+method setViewDef(bViewDef) class GridMVCDef
+	::oViewDef:setViewDef(bViewDef)
+return
+/*/{Protheus.doc} GridMVCDef::setModelDef
+Seta bloco de código responável por receber o objeto da Model, realizar manipulações e devolver o objeto modificado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param bModelDef, codeblock, bloco de código responável por receber o objeto da Model, realizar manipulações e devolver o objeto modificado
+/*/
+method setModelDef(bModelDef) class GridMVCDef
+	::oModelDef:setModelDef(bModelDef)
+return
+/*/{Protheus.doc} GridMVCDef::getIDGridModel
+Retorna o ID  do grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, Id do grid
+/*/
+method getIDGridModel() class GridMVCDef
+return ::oModelDef:getIDGridModel()
+/*/{Protheus.doc} GridMVCDef::getIDGridView
+Retorna o ID da view
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, ID da view
+/*/
+method getIDGridView() class GridMVCDef
+return ::oViewDef:getIDGridView()
+
+/*/{Protheus.doc} GridMVCDef::getBeforeMark
+Retorna o bloco de código com a ação que deve ser executada antes de marcar todos os registros
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return codeblock, bloco de código com a ação que deve ser executada antes de marcar todos os registros
+/*/
+method getBeforeMark() class GridMVCDef
+return ::oViewDef:getBeforeMark()
+/*/{Protheus.doc} GridMVCDef::setBeforeMark
+Seta o bloco de código com a ação que deve ser executada antes de marcar todos os registros
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param bBeforeMark, codeblock, bloco de código com a ação que deve ser executada antes de marcar todos os registros
+/*/
+method setBeforeMark(bBeforeMark) class GridMVCDef
+return ::oViewDef:setBeforeMark(bBeforeMark)
+/*/{Protheus.doc} GridMVCDef::addFwModelEvent
+Adiciona o objeto com a classe FwModelEvent responsável por interceptar alguns momentos do MVC como commit, após a gravação, antes da gravação e etc.
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param cIdEvent, character, ID do evento
+@param cOwner, character, ID do evento superior
+@param oFwModelEvent, object, Classe com o evento do modelo
+/*/
+method addFwModelEvent(cIdEvent,cOwner,oFwModelEvent) class GridMVCDef
+	::oModelDef:addFWModelEvent(cIdEvent,cOwner,oFwModelEvent)
+return
+
+method setPercentGrid(nPercentual) class GridMVCDef
+	::oViewDef:setPercentGrid(nPercentual)
+return 
+
+method getPercentGrid() class GridMVCDef
+return ::oViewDef:getPercentGrid()
+
+method setPercentForm(nPercentual) class GridMVCDef
+	::oViewDef:setPercentForm(nPercentual)
+return 
+
+method getPercentForm() class GridMVCDef
+return ::oViewDef:getPercentForm()
+
+method getModelDef() class GridMVCDef
+return ::oModelDef
+
+method getViewDef() class GridMVCDef
+return ::oViewDef
+/*
+Retorna o objeto com as definições do MVC
+Autor: Tiago Faria
+Data: 07/07/2021
+*/
+static function getDefMVC(cID)
+	local nPos := getPosDefMVC(cID,.f./*lAdd*/)
+	local oRet := nil
+
+	if nPos > 0
+		oRet := aGridDef[nPos,POS_DEF]
+	endif
+return oRet
+/*
+Retorna posição do array que está armazenado as definições do MVC
+Autor: Tiago Faria
+Data: 29/07/2021
+*/
+static function getPosDefMVC(cID,lAdd)
+	local nPos   := aScan(aGridDef,{|X|X[POS_ID] == cID})
+	default lAdd := .t.
+
+	if nPos == 0 .and. lAdd
+		aAdd(aGridDef,array(LEN_ARRAY))
+		nPos := len(aGridDef)
+	endif
+return nPos
+

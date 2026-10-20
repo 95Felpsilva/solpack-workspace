@@ -1,0 +1,92 @@
+#include 'totvs.ch'
+/*/{Protheus.doc} RecalcSeqLibPed
+Recalculo sequencia de liberao
+@type function
+@version 12.1.27
+@author Tiago Faria
+@since 05/08/2021
+@return logical, Se true foi recalculo com sucesso se false houve erro
+/*/
+user function RecalcSeqLibPed(lAuto, cCampo)
+	local lRet := .t.
+	if lAuto
+		lRet := recalculo(lAuto, cCampo)
+	else
+		fwMsgRun(, {|| lRet := recalculo(, cCampo)}, "RECALCULO SEQ LIB","Aguarde, recalculando sequencia de liberao...")
+	endif
+return lRet
+
+static function recalculo(lAuto, cCampo)
+	local lRet      	:= .t.
+	local cProdAtu  	:= FwFldGet("DESC_PRODUTO")
+	local cProduto  	:= ""
+	local nSaldo    	:= 0
+	local oModel    	:= FwModelActive()
+	local oView     	:= FwViewActive()
+	local oGrid     	:= oModel:getModel("MODEL_GRID")
+	local nQtdLine  	:= oGrid:Length()
+	local aRows     	:= FwSaveRows()
+	local nLine     	:= 0
+	local nLin			:= 0
+	local nLineAtu  	:= oGrid:getLine()
+	local aLinha    	:= {}
+	local cPedido   	:= ""
+	local cSituacao 	:= ""
+	local cItem     	:= ""
+	local nValPrevisto	:= 0
+
+	nSaldo := u_RecalcSaldoAtual(oGrid, cCampo)
+
+	for nLine := 1 to nQtdLine
+		oGrid:goLine(nLine)
+
+		if oGrid:isDeleted()
+			loop
+		endif
+		if cProdAtu == oGrid:getValue("DESC_PRODUTO")
+			cSituacao := alltrim(upper(oGrid:getValue("SITUACAO")))
+			cPedido   := oGrid:getValue("C9_PEDIDO")
+			cProduto  := oGrid:getValue("C9_PRODUTO")
+			cItem     := oGrid:getValue("C9_ITEM")
+
+			aAdd(aLinha,{cPedido+"|"+cProduto+"|"+cItem,nLine})
+		endif
+	next nLine
+
+	aSort(aLinha,,, {|x,y| y[1] > x[1]})
+
+	for nLine := 1 to len(aLinha)
+		nLin := aLinha[nLine,2]
+		oGrid:goLine(nLin)
+
+		if nLin == nLineAtu
+			if isLibCredEstoque()
+				nSaldo -= FwFldGet("QTD_LIB_ORIGINAL") - FwFldGet(cCampo)
+			else
+				nSaldo -= FwFldGet(cCampo)
+			endif
+
+			nValPrevisto := FwFldGet("ZO2_QTDPRE")
+		else
+			if !isLibCredEstoque()
+				nSaldo -= oGrid:getValue(cCampo)
+			endif
+
+			nValPrevisto := FwFldGet("ZO2_QTDPRE")
+		endif
+
+		oGrid:loadValue("SALDO",nSaldo)
+		oGrid:loadValue("SALDO_PREVISTO", nSaldo + nValPrevisto)
+		oGrid:loadValue("C6_ZZVLR", FwFldGet(cCampo) * FwFldGet("C9_PRCVEN"))
+		//oGrid:loadValue("VLR_PENDENTE", FwFldGet(cCampo) * FwFldGet("C9_PRCVEN"))
+	next nLine
+
+	FwRestRows(aRows)
+
+	if !lAuto
+		oView:refresh("VIEW_GRID")
+	endif
+return lRet
+
+static function isLibCredEstoque()
+return alltrim(FwFldGet("LEG")) == "BR_VERDE"

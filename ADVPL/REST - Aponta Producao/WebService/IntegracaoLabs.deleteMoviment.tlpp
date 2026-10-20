@@ -1,0 +1,164 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+#include "topconn.ch"
+
+namespace IntegracaoLabs
+
+/*/{Protheus.doc} deleteMoviment
+
+Estorno de movimentos internos via API
+
+@type function
+@author Gabriel Pereira - CRM Services
+@since 12/12/2022
+@version P12
+@database ORACLE
+
+@param [oClassRestFul], object, Objeto da Classe RESTFUL recebido do fonte com a definição das API's
+@param [oRest], object, Objeto da Classe Rest do TLPP recebido do fonte com a definição das API's
+
+@return logical, lRet - Indica se foi processado com sucesso
+/*/ 
+User Function deleteMoviment(oClassRestFul as object, oRest as object) as character	
+	Local cJsonResponse			:= "" as character
+	Local cDocEstorno			:= "" as character
+	Local nStatusCode			:= 0 as numeric
+	
+	Private cMsg				:= "" as character
+
+	cDocEstorno := oRest:getPathParamsRequest()["document"]
+
+	If ( podeExecutar(cDocEstorno) )		
+		If ( execProcesso(cDocEstorno) )
+			nStatusCode := 200
+			cJsonResponse := getJson(.T.)
+		Else
+			nStatusCode := 400
+			cJsonResponse := getJson(.F.)
+		EndIf
+	Else
+		nStatusCode := 400
+		cJsonResponse := getJson(.F.)
+	EndIf
+	
+	oRest:setKeyHeaderResponse("Content-Type", "Application/Json;charset=utf-8")
+	oRest:setResponse(cJsonResponse)					
+	oRest:setStatusCode(nStatusCode)
+
+Return cJsonResponse
+
+/*
+	Rotina de pré-validação da execução da rotina
+*/
+Static Function podeExecutar(cDocEstorno as character) as logical
+	Local lAtiva	:= GetNewPar("ES_ATVDD3", .T.)
+	Local lRet 		:= .F.
+
+	Begin Sequence
+		If ( !lAtiva )
+			cMsg := "Rotina de estorno do documento está desativada."
+			Break
+		EndIf
+
+		If Empty(cDocEstorno)
+			cMsg := "Não foi informado o número de documento a ser estornado"
+			Break
+		EndIf
+
+		DbSelectArea("SD3")
+		SD3->(DbSetOrder(2)) // D3_FILIAL + D3_DOC + D3_COD
+		If !SD3->(MsSeek(FWxFilial('SD3')+AvKey(cDocEstorno,"D3_DOC")))
+			cMsg := "Documento não foi encontrado!"
+			Break
+		EndIf
+
+		lRet := .T.
+	End Sequence
+
+Return lRet
+
+/*
+	Rotina para realizar montagem e execução do processo de movimentação
+*/
+Static Function execProcesso(cDocEstorno as character) as logical
+	Local lRet 				:= .T. as logical
+	Local cChave			:= "" as character
+	Local aRecord			:= {} as array
+	Local aAreaSD3			:= {} as array
+
+	Local aAutoCab			:= {} as array
+	Local aAutoItens		:= {} as array
+	
+	aAreaSD3 := SD3->(FWGetArea())
+	cChave   := SD3->D3_FILIAL + SD3->D3_DOC
+  
+	aAutoCab := {;
+		{"D3_DOC", SD3->D3_DOC, Nil};
+	}
+
+	While !SD3->(EoF()) .And. (SD3->D3_FILIAL+SD3->D3_DOC) == cChave
+		aRecord := {}
+		aAdd(aRecord, {"D3_COD",     SD3->D3_COD,   Nil})
+		aAdd(aRecord, {"D3_UM",      SD3->D3_UM,    Nil})
+		aAdd(aRecord, {"D3_QUANT",   SD3->D3_QUANT, Nil})
+		aAdd(aRecord, {"D3_LOCAL",   SD3->D3_LOCAL, Nil})
+		aAdd(aRecord, {"D3_ESTORNO", "S",           Nil})
+		aAdd(aAutoItens, aClone(aRecord))
+
+		SD3->(DbSkip())
+	EndDo
+
+	FWRestArea(aAreaSD3)
+
+	If ( lRet ) 
+		If ( Len(aAutoCab) > 0 .And. Len(aAutoItens) > 0)
+			lRet := execMovimentacoes(aAutoCab, aAutoItens)
+		Else
+			cMsg := "Não há dados a serem processados" 
+		EndIf
+	EndIf
+
+Return lRet
+
+/*
+	Executa via execauto a inclusão da movimentação interna, com base 
+	nas informações enviadas via JSON
+*/
+Static Function execMovimentacoes(aAutoCab as array, aAutoItens as array) as logical
+	Local nItem			:= 0 as integer
+	Local cError    	:= "" as character
+	Local aMsgErro		:= {} as array
+	Local lRet 			:= .T. as logical
+
+	Private lMsErroAuto		:= .F. as Logical
+	Private lAutoErrNoFile	:= .T. as Logical
+
+	MsExecAuto({|x,y,z| MATA241(x,y,z) }, aAutoCab, aAutoItens, 6)
+
+	If ( lMsErroAuto )
+		lRet := .F.
+		aMsgErro := GetAutoGRLog()
+		
+		For nItem := 1 To Len( aMsgErro )
+			cError += StrTran( StrTran( StrTran( aMsgErro[nItem], "<", "" ), "-", "" ), CRLF, " " )
+		Next
+		
+		cMsg := cError
+	EndIf
+
+Return lRet
+
+/*
+	Monta JSON de retorno
+*/
+Static Function getJson(lSuccess as logical) as json
+	Local jResponse	:= JsonObject():New() as json
+
+	If lSuccess
+		jResponse['messageSuccess'] := "Movimento cadastrado com sucesso!"
+	Else
+		jResponse['messageError'] := cMsg
+	EndIf
+
+Return jResponse

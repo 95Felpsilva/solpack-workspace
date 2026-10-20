@@ -1,0 +1,254 @@
+#include 'totvs.ch'
+/*/{Protheus.doc} CompareMemoryBank
+Classe para realizar a comparação de dados que estão em memória com dados que estão no banco
+@type class
+@version 12.1.33 
+@author Tiago Faria
+@since 10/11/2021
+/*/
+class CompareMemoryBank
+	private data lGetdados as logical
+	private data lMVC      as logical
+	private data lMemory   as logical
+	public data aDiff      as array
+	private data cAlias    as character
+	private data nIndex    as numeric
+	private data cKey      as character
+	private data bValidField as CodeBlock
+
+	public method new() CONSTRUCTOR
+
+	private method run()
+	private method setTypeCompare()
+	private method getContentMemory()
+
+	public method runMVC()
+	public method runGetDados()
+	public method runMemory()
+	public method showMessage()
+	public method getMessage()
+endclass
+/*/{Protheus.doc} CompareMemoryBank::new
+Método Construtor da classe
+@type method
+@version 12.1.33 
+@author Tiago Faria
+@since 10/11/2021
+/*/
+method new(bValidField) class CompareMemoryBank
+	default bValidField := {|cField,cContentMemory,cContentDB| .t.}
+	::setTypeCompare()
+	::aDiff  := {}
+	::cAlias := ""
+	::bValidField := bValidField
+return
+/*/{Protheus.doc} CompareMemoryBank::run
+Executa a comparação dos dados
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 10/11/2021
+@return logical, Se true há diferenças entre o banco e a memória, se false não há diferenças
+/*/
+method run(cAlias,nIndex,cKey,lDeleted,cOnlyFields,cSeparatorChar) class CompareMemoryBank
+	local aArea            := Lj7GetArea({cAlias})
+	local lRet             := .t.
+	local nQtyField        := (cAlias)->(fCount())
+	local nField           := 0
+	local cField           := ""
+	local cContentDB       := ""
+	local cContentMemory   := ""
+	local aAux             := {}
+	local lOnlyFields      := !empty(cOnlyFields)
+	default lDeleted       := .f.
+	default cSeparatorChar := "|"
+
+	::aDiff := {}
+
+	BEGIN SEQUENCE
+		
+		Posicione(cAlias,nIndex,cKey,"!Eof()")
+
+		if ::lGetDados .and. lDeleted .and. (cAlias)->(!Eof()) .and. eval(::bValidField,"DELETELINE",lDeleted,!lDeleted)
+			aAdd(aAux,getJson("Linha " + CValToChar(nLine),"Linha deletada","Linha existente no banco"))
+			BREAK
+		endif
+
+		if (cAlias)->(!eof()) .and. !lDeleted
+			for nField := 1 to nQtyField
+				cField       := (cAlias)->(fieldName(nField))
+
+				if lOnlyFields .and. !cField + cSeparatorChar $ cOnlyFields
+					loop
+				endif
+
+				cContentDB     := (cAlias)->(&(cField))
+				cContentMemory := ::getContentMemory(cField)
+
+				if valType(cContentMemory) <> "U" .and. cContentDB <> cContentMemory .and. eval(::bValidField,cField,cContentMemory,cContentDB)
+					aAdd(aAux,getJson(cField,cContentMemory,cContentDB))
+					BREAK
+				endif
+			next nField
+		endif
+
+		if ::lGetDados .and. !lDeleted .and. (cAlias)->(Eof()) .and. eval(::bValidField,"INSERTLINE",lDeleted,!lDeleted)
+			aAdd(aAux,getJson("Linha " + CValToChar(nLine),"Linha inserida","Não existe no banco"))
+			BREAK
+		endif
+
+		RECOVER
+		lRet := .f.
+		if len(aAux) > 0
+			aAdd(::aDiff,aClone(aAux))
+			aAux := {}
+		endif
+
+	END SEQUENCE
+
+	Lj7RestArea(aArea)
+return lRet
+/*/{Protheus.doc} CompareMemoryBank::runMVC
+Executa a comparação dos dados para telas em MVC
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 10/11/2021
+@return logical, Se true há diferenças entre o banco e a memória, se false não há diferenças
+/*/
+method runMVC(cAlias,nIndex,cKey) class CompareMemoryBank
+	::setTypeCompare(.t.,.f.,.f.)
+return ::run(cAlias,nIndex,cKey,/*lDeleted*/)
+/*/{Protheus.doc} CompareMemoryBank::runGetDados
+Executa a comparação dos dados para grids em GetDados
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 10/11/2021
+@return logical, Se true há diferenças entre o banco e a memória, se false não há diferenças
+/*/
+method runGetDados(cAlias,nIndex,cKey,cFieldsKeyGetDados,cOnlyFields) class CompareMemoryBank
+	local lRet   := .t.
+	local cKeyIt := ""
+	local nLin   := 0
+	private nLine  := 0
+
+	::setTypeCompare(.f.,.t.,.f.)
+
+	for nLin := 1 to len(aCols)
+		nLine := nLin
+		cKeyIt := getKeyGetDados(cFieldsKeyGetDados,cAlias,nLine)
+		if !::run(cAlias,nIndex,cKey+cKeyIt,gdDeleted(nLine),cOnlyFields)
+			lRet := .f.
+			exit
+		endif
+	next nLin
+return lRet
+/*/{Protheus.doc} CompareMemoryBank::runMemory
+Executa a comparação para variavies de memória exemplo: M->C5_CLIENTE == SC5->C5_CLIENTE
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 10/11/2021
+@return logical, Se true há diferenças entre o banco e a memória, se false não há diferenças
+/*/
+method runMemory(cAlias,nIndex,cKey,cOnlyFields) class CompareMemoryBank
+	::setTypeCompare(.f.,.f.,.t.)
+return ::run(cAlias,nIndex,cKey,/*lDeleted*/,cOnlyFields)
+/*/{Protheus.doc} CompareMemoryBank::setTypeCompare
+Atribui o tipo de comparação nos atributos da classe
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 10/11/2021
+@param lMVC, logical, Indica se a comparação é MVC
+@param lGetDados, logical, Indica se a comparação é em getdados
+@param lMemory, logical, Indica se a comparação é em memória
+/*/
+method setTypeCompare(lMVC,lGetDados,lMemory) class CompareMemoryBank
+	default lGetdados := .f.
+	default lMVC      := .f.
+	default lMemory   := .f.
+
+	::lGetdados := lGetdados
+	::lMVC      := lMVC
+	::lMemory   := lMemory
+return
+/*/{Protheus.doc} CompareMemoryBank::getContentMemory
+Retorna o conteudo da memória para comparação com o banco dados
+@type method
+@version 12.1.33
+@author Tiago Faria
+@since 10/11/2021
+@param cField, character, ID do campo
+@return variant, Retorna o conteudo do campo que está na memoria
+/*/
+method getContentMemory(cField) class CompareMemoryBank
+	local xValue := nil
+
+	if ::lMVC
+		xValue := FwFldGet(cField,/*nLinha*/,/*oModel*/,.f./*lShowMsg*/)
+	elseif ::lGetDados
+		if gdFieldPos(cField) > 0
+			xValue := gdFieldGet(cField,nLine/*nLine*/,.t./*lReadVar*/)
+		endif
+	elseif ::lMemory
+		if type("M->" + cField) <> "U"
+			xValue := &("M->" + cField)
+		endif
+	endif
+return xValue
+
+method showMessage(cIDMessage) class CompareMemoryBank
+	u_myHelp(::getMessage(),"Não permitido a alteração dos campos listados a cima, volte o valor original dos campos para continuar!",cIDMessage)
+return
+
+method getMessage() class CompareMemoryBank
+	local cMsg := ""
+	local nDiff := 0
+	local oDiff := nil
+	local nLines := 0
+
+	for nLines := 1 to len(::aDiff)
+		for nDiff := 1 to len(::aDiff[nLines])
+			oDiff := ::aDiff[nLines,nDiff]
+			cMsg += "Campo <b>" + alltrim(oDiff["title"]) + "</b>"
+			cMsg += " alterado de <b>" + alltochar(oDiff["contentDb"],getSX3Cache(oDiff["field"],"X3_PICTURE"))+ "</b>"
+			cMsg += " para <b>" + alltochar(oDiff["contentMemory"],getSX3Cache(oDiff["field"],"X3_PICTURE"))+ "</b>"
+			cMsg += CRLF
+		next nDiff
+	next nLines
+return cMsg
+
+static function getKeyGetDados(cFields,cAlias,nLine)
+	local aFields := StrToKarr(cFields,"+")
+	local nField  := 0
+	local cField  := ""
+	local cKey    := ""
+
+	for nField := 1 to len(aFields)
+		cField := aFields[nField]
+
+		if "_FILIAL" $ cField
+			cKey += xFilial(cAlias)
+			loop
+		endif
+
+		if gdFieldPos(cField) > 0
+			cKey += gdFieldGet(cField,nLine/*nLine*/,.t./*lReadVar*/)
+		endif
+	next nField
+return cKey
+
+static function getJson(cField,cContentMemory,cContentDB)
+	local oJson := JsonObject():new()
+	local cTitle := getSX3Cache(cField,"X3_TITULO")
+	if empty(cTitle)
+		cTitle := cField
+	endif
+
+	oJson["field"]         := cField
+	oJson["title"]         := cTitle
+	oJson["contentMemory"] := cContentMemory
+	oJson["contentDb"]     := cContentDB
+return oJson

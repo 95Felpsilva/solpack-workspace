@@ -1,0 +1,203 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+
+#define ALIAS_LOG_PROCESSAMENTO		"ZZ8"
+
+namespace IntegrationFracttal
+
+/*/{Protheus.doc} postRequestWarehouse
+
+Inclusão de solicitação ao armazém via rotina automática MATA105
+
+@type function
+@author Gabriel Pereira - CRM Services
+@since 25/01/2024
+@version P12
+@database ORACLE
+
+@param [oClassRestFul], object, Objeto da Classe RESTFUL recebido do fonte com a definição das API's
+@param [oRest], object, Objeto da Classe Rest do TLPP recebido do fonte com a definição das API's
+
+@return logical, lRet - Indica se foi processado com sucesso
+/*/ 
+User Function postRequestWarehouse(oClassRestFul as object, oRest as object) as character	
+	Local nStatusCode			:= 0 as numeric
+	Local cJsonResponse			:= "" as character
+	Local cBody					:= "" as character
+	Local jBody 				:= Nil as Json
+	
+	Private cMsg				:= "" as character
+
+	cBody := oRest:getBodyRequest()
+	jBody := JsonObject():New()
+
+	If ( jBody:FromJson(cBody) == Nil )
+		If ( execProcesso(jBody) )
+			nStatusCode := 200
+			cJsonResponse := getJson(nStatusCode, .T.)
+		Else
+			nStatusCode := 400
+			cJsonResponse := getJson(nStatusCode, .F.)
+		EndIf
+	Else
+		cMsg := "Json inválido"
+		cJsonResponse := getJson(nStatusCode, .F.)
+		nStatusCode := 400
+	EndIf
+
+	gravaLogProcessamento(nStatusCode, cBody, FWJsonSerialize(cJsonResponse, .F., .F., .T.))
+	
+	oRest:setKeyHeaderResponse("Content-Type", "Application/Json;charset=utf-8")
+	oRest:setResponse(cJsonResponse)					
+	oRest:setStatusCode(nStatusCode)
+
+Return cJsonResponse
+
+/*
+	Rotina para realizar montagem e execução do processo de solitação
+*/
+Static Function execProcesso(jBody) as logical
+	Local lRet 				:= .T. as logical
+	Local oAdapter			:= NIL as object
+	Local oHashMapHeader	:= NIL as object
+	Local oHashMapItem		:= NIL as object
+
+	Private aAutoCab		:= {} as array
+	Private aAutoItens		:= {} as array
+	
+	oHashMapHeader := getMapFieldsHeader()
+	oHashMapItem := getMapFieldsItem()
+
+	oAdapter := IntegrationFracttal.ProcessaMVCAPIProtheusData():new("SCP", 3)	
+	
+	oAdapter:addMapFieldsHeader(oHashMapHeader, "SCP")
+	oAdapter:addMapFieldsItem(oHashMapItem, "SCP")
+	
+	lRet := oAdapter:fromExecAuto(jBody)
+	
+	If ( lRet )
+		aAutoCab := oAdapter:getDataHeader()
+		aAutoItens := oAdapter:getDataaItems()
+	Else
+		cMsg := oAdapter:getErrorMessage()
+	EndIf
+
+	If ( lRet ) 
+		If ( Len(aAutoCab) > 0 .And. Len(aAutoItens) > 0)
+			lRet := execSolicitacao(aAutoCab, aAutoItens)
+		Else
+			cMsg := "Não há dados a serem processados" 
+		EndIf
+	EndIf
+
+	oAdapter:destroy()
+
+Return lRet
+
+/*
+	Monta mapa de campos do cabeçalho em formato de objeto
+*/
+Static Function getMapFieldsHeader() as object
+	Local oHashFields	:= NIL as object
+
+	oHashFields := tHashMap():new()
+
+	oHashFields:Set("affiliate_code", "CP_FILIAL")
+	oHashFields:Set("requesting", "CP_SOLICIT")
+	oHashFields:Set("emission", "CP_EMISSAO")
+
+Return oHashFields
+
+/*
+	Monta mapa de campos dos itens em formato de objeto
+*/
+Static Function getMapFieldsItem() as object
+	Local oHashFields	:= NIL as object
+
+	oHashFields := tHashMap():new()
+
+	oHashFields:Set("product", 			"CP_PRODUTO" )
+	oHashFields:Set("quantity", 		"CP_QUANT" )
+	oHashFields:Set("item", 			"CP_ITEM" )
+	oHashFields:Set("cost_center", 		"CP_CC" )
+	oHashFields:Set("stockLocation", 	"CP_LOCAL" )
+	oHashFields:Set("lot", 				"CP_LOTE" )
+	oHashFields:Set("estimatedDate", 	"CP_DATPRF" )
+	oHashFields:Set("note", 			"CP_OBS" )
+	oHashFields:Set("productionOrder", 	"CP_OP" )
+	oHashFields:Set("accountOfProduct", "CP_CONTA" )
+	oHashFields:Set("requesterCode", 	"CP_CODSOLI" )
+	oHashFields:Set("numberOfRelated", 	"CP_NUMSC" )
+	oHashFields:Set("itemOfRelated", 	"CP_ITSC" )
+	oHashFields:Set("user", 			"CP_USER" )
+	oHashFields:Set("newsletterNumber", "CP_NRBPIMS" )
+
+Return oHashFields
+
+/*
+	Executa via execauto a inclusão de solicitação ao armazém, com base 
+	nas informações enviadas via JSON
+*/
+Static Function execSolicitacao(aAutoCab as array, aAutoItens as array) as logical
+	Local nItem			:= 0 as integer
+	Local cError    	:= "" as character
+	Local aMsgErro		:= {} as array
+	Local lRet 			:= .T. as logical
+
+	Private lMsErroAuto		:= .F. as Logical
+	Private lAutoErrNoFile	:= .T. as Logical
+
+	MsExecAuto({|x,y,z| MATA105(x,y,z) }, aAutoCab, aAutoItens, 3)
+
+	If lMsErroAuto
+		lRet := .F.
+		aMsgErro := GetAutoGRLog()
+		
+		For nItem := 1 To Len( aMsgErro )
+			cError += StrTran( StrTran( StrTran( aMsgErro[nItem], "<", "" ), "-", "" ), CRLF, " " )
+		Next
+		
+		cMsg := cError
+	Else
+		cMsg := "Solicitação " + SCP->CP_NUM + " gerada com sucesso!"
+	EndIf
+
+Return lRet
+
+/*
+	Rotina para realizar a gravação de log de integração
+*/
+Static Function gravaLogProcessamento(nStatusCode, cJsonRecebido, JsonRetorno)
+	Local cAliasLog				:= ALIAS_LOG_PROCESSAMENTO
+	Local cCpoIdentificador		:= cAliasLog+"_ID"
+
+	If ( FwAliasInDic(cAliasLog) )
+		RecLock(cAliasLog, .T.)
+			(cAliasLog)->&(cAliasLog+"_ID") 		:= NextNumero( cAliasLog, 1, cCpoIdentificador, .T. )
+			(cAliasLog)->&(cAliasLog+"_DATA") 		:= Date()
+			(cAliasLog)->&(cAliasLog+"_HORA") 		:= Time()
+			(cAliasLog)->&(cAliasLog+"_STATUS") 	:= IIF(nStatusCode == 200, "1", "2")
+			(cAliasLog)->&(cAliasLog+"_JSONE") 		:= DecodeUTF8(cJsonRecebido)
+			(cAliasLog)->&(cAliasLog+"_JSONR") 		:= DecodeUTF8(JsonRetorno)
+			(cAliasLog)->&(cAliasLog+"_MSG") 		:= DecodeUTF8(cMsg)
+		(cAliasLog)->(MsUnlock())
+	EndIf
+
+Return
+
+/*
+	Monta JSON de retorno
+*/
+Static Function getJson(nStatusCode as numeric, lSuccess as logical) as json
+	Local jResponse	:= JsonObject():New() as json
+
+	cMsg := EncodeUTF8(cMsg)
+
+	If ( lSuccess )
+		jResponse := gfin.util.answerFormat(lSuccess, nStatusCode, cMsg)
+	Else
+		jResponse := gfin.util.AnswerErrorFormat(nStatusCode, cMsg)
+	EndIf
+
+Return jResponse

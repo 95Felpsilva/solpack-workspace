@@ -1,0 +1,250 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+
+namespace IntegrationFracttal
+
+/*/{Protheus.doc} getRequestWarehouse
+
+Retorna lista de solicitações realizadas ao armazém
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 24/01/2024
+@version P12
+@database MSSQL
+
+@param [oClassRestFul], object, Objeto da Classe RESTFUL recebido do fonte com a definição das API's
+@param [oRest], object, Objeto da Classe Rest do TLPP recebido do fonte com a definição das API's
+
+@return logical, lRet - Indica se foi processado com sucesso
+/*/ 
+User Function getRequestWarehouse(oClassRestFul as object, oRest as object) as character	
+	Local cJsonResponse			:= "" as character
+	Local cQueryHeader			:= "" as character
+	Local nStatusCode			:= 0 as numeric
+    Local lUseTmpTable			:= .F. as logical
+    Local lRetExecuteAPIREST	:= .T. as logical
+	Local oFwAdapterBaseV2		:= NIL as object
+
+	Private cTagCabecalho		:= "headers" as character
+	Private cTagItems			:= "items" as character
+	Private cWhere		 		:= "" as character 
+	Private cFilter		 		:= "" as character 
+	Private nPage				:= 1 as numeric 
+	Private nPageSize		 	:= 50 as numeric 
+	Private aQueryString 	 	:= {} as array 
+
+	oFwAdapterBaseV2 	:= FwAdapterBaseV2():New("GET")
+
+	getParamResquest()
+    oFwAdapterBaseV2:setPage(nPage)
+    oFwAdapterBaseV2:setPageSize(nPageSize)
+
+	createMapHeader(@oFwAdapterBaseV2)
+	cQueryHeader := getQryRequestWarehouse(.T.)
+
+	oFwAdapterBaseV2:SetStyleReturn(cTagCabecalho)
+	oFwAdapterBaseV2:SetQuery(cQueryHeader)
+	oFwAdapterBaseV2:SetWhere(cWhere)
+	oFwAdapterBaseV2:SetOrder("")
+	If ( Len(aQueryString) > 0 )
+		oFwAdapterBaseV2:SetUrlFilter(aQueryString)
+	EndIf
+
+	lRetExecuteAPIREST := oFwAdapterBaseV2:Execute(lUseTmpTable)
+
+	If ( lRetExecuteAPIREST )
+		oFwAdapterBaseV2:FillGetResponse()
+
+		changeItemByIndex(@oFwAdapterBaseV2)
+
+		cJsonResponse 		:= oFwAdapterBaseV2:GetJSONResponse()
+		nStatusCode 		:= oFwAdapterBaseV2:GetCode()
+	Else
+		cJsonResponse 		:= AllTrim(oFwAdapterBaseV2:cMessage)
+		nStatusCode 		:= oFwAdapterBaseV2:GetCode()
+	EndIf
+
+	freeObj(oFwAdapterBaseV2)
+
+	oRest:setKeyHeaderResponse("Content-Type", "Application/Json;charset=utf-8")
+	oRest:setResponse(EncodeUTF8(cJsonResponse))					
+	oRest:setStatusCode(nStatusCode)
+
+Return cJsonResponse
+
+/*
+	Rotina para monsta tag de itens
+*/
+Static Function changeItemByIndex(oFwAdapterBaseV2)
+	Local lUseTmpTable			:= .F. as logical
+    Local lRetExecuteAPIREST	:= .T. as logical
+	Local nRecord				:= 0 as numeric
+
+	(oFwAdapterBaseV2:oJsonObj:cAlias)->(DBGoTop())
+
+	While (oFwAdapterBaseV2:oJsonObj:cAlias)->(!Eof())
+		nRecord++
+		
+		oAdapterItems 	:= FwAdapterBaseV2():New("GET")
+		createMapItems(@oAdapterItems)
+		oFwAdapterBaseV2:SetStyleReturn(cTagItems)
+		oAdapterItems:SetQuery(getQryRequestWarehouse())
+		oAdapterItems:SetWhere("REFERENCIA = " + ValToSql((oFwAdapterBaseV2:oJsonObj:cAlias)->REFERENCIA))
+
+		lRetExecuteAPIREST := oAdapterItems:Execute(lUseTmpTable)
+
+		If ( lRetExecuteAPIREST )
+			oAdapterItems:FillGetResponse()
+
+			oFwAdapterBaseV2:oJsonObj:oJsonObj[cTagCabecalho, nRecord, cTagItems] := oAdapterItems:oJsonObj:oJsonObj[cTagItems]
+
+		EndIf
+	
+		(oFwAdapterBaseV2:oJsonObj:cAlias)->(DBSkip())
+	EndDo
+	
+Return
+
+/*
+	Cria mapa de campos do cabeçalho a ser retornado na API
+*/
+Static Function createMapHeader(oFwAdapterBaseV2) as variant
+	oFwAdapterBaseV2:AddMapFields("affiliate_code"			, "CP_FILIAL", .T., .T., {"CP_FILIAL", "C", tgv.util.GetFieldLength("CP_FILIAL"), 0})
+	oFwAdapterBaseV2:AddMapFields("requestNumber"			, "CP_NUM", .T., .F., {"CP_NUM", "C", tgv.util.GetFieldLength("CP_NUM"), 0})
+	oFwAdapterBaseV2:AddMapFields("requesting"				, "CP_SOLICIT", .T., .F., {"CP_SOLICIT", "C", tgv.util.GetFieldLength("CP_SOLICIT"), 0})
+	oFwAdapterBaseV2:AddMapFields("emission"				, "CP_EMISSAO", .T., .F., {"CP_EMISSAO", "D", tgv.util.GetFieldLength("CP_EMISSAO"), 0})
+	oFwAdapterBaseV2:AddMapFields("status"					, "STATUS", .T., .F., {"STATUS", "C", 25, 0})
+	oFwAdapterBaseV2:AddMapFields("user"					, "CP_USER", .T., .F., {"CP_USER", "C", tgv.util.GetFieldLength("CP_USER"), 0})
+	oFwAdapterBaseV2:AddMapFields("REFERENCIA"				, "REFERENCIA", .F., .F., {"REFERENCIA", "C", tgv.util.GetFieldLength("CP_FILIAL")+tgv.util.GetFieldLength("CP_NUM"), 0})
+
+Return
+
+/*
+	Cria mapa de campos dos itens a ser retornado na API
+*/
+Static Function createMapItems(oFwAdapterBaseV2) as variant
+	oFwAdapterBaseV2:AddMapFields("product"					, "CP_PRODUTO", .T., .T., {"CP_PRODUTO", "C", tgv.util.GetFieldLength("CP_PRODUTO"), tgv.util.GetFieldDecimal("CP_PRODUTO")} )
+	oFwAdapterBaseV2:AddMapFields("quantity"				, "CP_QUANT", .T., .F., {"CP_QUANT", "N", tgv.util.GetFieldLength("CP_QUANT"), 0} )
+	oFwAdapterBaseV2:AddMapFields("item"					, "CP_ITEM", .T., .F., {"CP_ITEM", "C", tgv.util.GetFieldLength("CP_ITEM"), 0} )
+	oFwAdapterBaseV2:AddMapFields("cost_center"				, "CP_CC", .T., .F., {"CP_CC", "C", tgv.util.GetFieldLength("CP_CC"), 0} )
+	oFwAdapterBaseV2:AddMapFields("stockLocation"			, "CP_LOCAL", .T., .F., {"CP_LOCAL", "C", tgv.util.GetFieldLength("CP_LOCAL"), 0} )
+	oFwAdapterBaseV2:AddMapFields("lot"						, "CP_LOTE", .T., .F., {"CP_LOTE", "C", tgv.util.GetFieldLength("CP_LOTE"), 0} )
+	oFwAdapterBaseV2:AddMapFields("estimatedDate"			, "CP_DATPRF", .T., .F., {"CP_DATPRF", "D", tgv.util.GetFieldLength("CP_DATPRF"), 0} )
+	oFwAdapterBaseV2:AddMapFields("note"					, "CP_OBS", .T., .F., {"CP_OBS", "C", tgv.util.GetFieldLength("CP_OBS"), 0} )
+	oFwAdapterBaseV2:AddMapFields("productionOrder"			, "CP_OP", .T., .F., {"CP_OP", "C", tgv.util.GetFieldLength("CP_OP"), 0} )
+	oFwAdapterBaseV2:AddMapFields("accountOfProduct"		, "CP_CONTA", .T., .F., {"CP_CONTA", "C", tgv.util.GetFieldLength("CP_CONTA"), 0} )
+	oFwAdapterBaseV2:AddMapFields("requesterCode"			, "CP_CODSOLI", .T., .F., {"CP_CODSOLI", "C", tgv.util.GetFieldLength("CP_CODSOLI"), 0} )
+	oFwAdapterBaseV2:AddMapFields("numberOfRelated"			, "CP_NUMSC", .T., .F., {"CP_NUMSC", "C", tgv.util.GetFieldLength("CP_NUMSC"), 0} )
+	oFwAdapterBaseV2:AddMapFields("itemOfRelated"			, "CP_ITSC", .T., .F., {"CP_ITSC", "C", tgv.util.GetFieldLength("CP_ITSC"), 0} )
+	oFwAdapterBaseV2:AddMapFields("newsletterNumber"		, "CP_NRBPIMS", .T., .F., {"CP_NRBPIMS", "C", tgv.util.GetFieldLength("CP_NRBPIMS"), 0} )
+	oFwAdapterBaseV2:AddMapFields("quantityServed"			, "CP_QUJE", .T., .F., {"CP_QUJE", "N", tgv.util.GetFieldLength("CP_QUJE"), tgv.util.GetFieldDecimal("CP_QUJE")} )
+
+Return
+
+/*
+	Cria query de executação da API
+*/
+Static Function getQryRequestWarehouse(lIsHeaders) as character
+	Local cQuery		:= "" as character
+	Local lFilterUser	:= GetNewPar("ES_FILUSRF", .T.)
+
+	Default lIsHeaders	:= .F.
+
+	cQuery := " SELECT " + CRLF
+	If ( lIsHeaders )
+		cQuery += "     DISTINCT " + CRLF
+		cQuery += "     CP_FILIAL " + CRLF
+		cQuery += "     ,CP_NUM " + CRLF
+		cQuery += "     ,CP_SOLICIT " + CRLF
+		cQuery += "     ,CP_EMISSAO " + CRLF
+		cQuery += "     ,CP_USER " + CRLF
+		cQuery += "     ,CASE " + CRLF
+		cQuery += "     	WHEN CP_QUJE = 0 AND ( CP_STATSA NOT LIKE '%B%' AND CP_STATSA NOT LIKE '%R%' ) THEN " + CRLF
+		cQuery += "     		'Pendente' " + CRLF
+		cQuery += "     	WHEN CP_QUANT = CP_QUJE AND ( CP_STATSA NOT LIKE '%B%' AND CP_STATSA NOT LIKE '%R%' ) THEN " + CRLF
+		cQuery += "     		'Completada' " + CRLF
+		cQuery += "     	WHEN CP_QUANT > CP_QUJE AND CP_QUJE > 0 AND ( CP_STATSA NOT LIKE '%B%' AND CP_STATSA NOT LIKE '%R%' ) THEN " + CRLF
+		cQuery += "     		'Parcialmente' " + CRLF
+		cQuery += "     	WHEN CP_STATSA = 'R' THEN " + CRLF
+		cQuery += "     		'Rejeitada' " + CRLF
+		cQuery += "     END AS STATUS " + CRLF
+		cQuery += "     ,CP_FILIAL+CP_NUM AS REFERENCIA " + CRLF
+	Else
+		cQuery += "     CP_PRODUTO " + CRLF
+		cQuery += "     ,CP_QUANT " + CRLF
+		cQuery += "     ,CP_ITEM " + CRLF
+		cQuery += "     ,CP_CC " + CRLF
+		cQuery += "     ,CP_LOCAL " + CRLF
+		cQuery += "     ,CP_LOTE " + CRLF
+		cQuery += "     ,CP_DATPRF " + CRLF
+		cQuery += "     ,CP_OBS " + CRLF
+		cQuery += "     ,CP_OP " + CRLF
+		cQuery += "     ,CP_CONTA " + CRLF
+		cQuery += "     ,CP_CODSOLI " + CRLF
+		cQuery += "     ,CP_NUMSC " + CRLF
+		cQuery += "     ,CP_ITSC " + CRLF
+		cQuery += "     ,CP_USER " + CRLF
+		cQuery += "     ,CP_NRBPIMS " + CRLF
+		cQuery += "     ,CP_QUJE " + CRLF
+		cQuery += "     ,CP_FILIAL+CP_NUM AS REFERENCIA " + CRLF
+	EndIf
+	cQuery += " FROM " + CRLF 
+    cQuery +=       RetSqlTab("SCP") + CRLF
+	cQuery += " WHERE " + CRLF
+	cQuery += "     1 = 1" + CRLF
+	If ( lFilterUser )
+		cQuery += "     AND  CP_USER = '000330' " + CRLF
+	EndIf
+    cQuery += "     AND " + RetSqlDel("SCP") + CRLF
+    
+    cQuery := "SELECT #QueryFields# FROM (" + cQuery + ") SUBQRYREST WHERE 1 = 1 AND #QueryWhere#"
+
+Return cQuery
+
+/*
+	Rotina para recuperar parâmetros enviados
+*/
+Static Function getParamResquest()
+	Local aParams	:= {} as array
+	Local cParam	:= "" as character
+	Local cContent	:= "" as character
+	Local nParam	:= 1 as numeric
+
+	nPage := oRest:getQueryRequest()["Page"]
+
+	If ( Empty(nPage) )
+		nPage := 1
+	Endif
+	If ( ValType(nPage) == "C" )
+		nPage := Val(nPage)
+	Endif
+
+	nPageSize := oRest:getQueryRequest()["PageSize"]
+	
+	If ( Empty(nPageSize) )
+		nPageSize := 50
+	Endif
+	If ( ValType(nPageSize) == "C" )
+		nPageSize := Val(nPageSize)
+	Endif
+	
+	cWhere := oRest:getQueryRequest()["Where"]
+	If ( Empty(cWhere) )
+		cWhere := "1 = 1"
+	Endif
+	
+	aParams := oRest:getQueryRequest():GetNames()
+
+	If ( Len(aParams) > 0 )
+		For nParam:=1 To Len(aParams)
+			cParam 	:= aParams[nParam]
+			cContent:= oRest:getQueryRequest()[cParam]
+
+			If ( !Empty(cParam) .And. !( Upper(AllTrim(cParam)) $ "PAGESIZE,PAGE,WHERE" ) )
+				aAdd(aQueryString, {cParam, cContent})
+			EndIf
+		Next nParam
+	EndIf 
+Return

@@ -1,0 +1,266 @@
+#include 'totvs.ch'
+#include 'tlpp-core.th'
+#include 'tlpp-rest.th'
+
+/*/{Protheus.doc} ApiFluxoDeCaixa
+Rest Fluxo de Caixa
+@type class
+@version 12.1.2410
+@author Tiago Faria
+@since 29/05/2025
+/*/
+class VerificaAcessoUsuario
+	public method new()
+	public method GetDadosUser() as character
+	public method GetRotinasUser() as character
+	public method GetUsrCad() as character
+	public method GetCB5Cad() as character
+
+	@Get("/solpack/verificar-situacao-usuario/:usuario")
+	public method VerificaSituacaoUsuario() as logical
+
+	@Get("/solpack/verificar-rotinas-usuario/:usuario")
+	public method VerificaRotinasUsuario() as logical
+endclass
+
+/*/{Protheus.doc} verificaAcessoUsuario::new
+Método construtor da classe
+@type method
+@version 12.1.2410
+@author Felipe Silva
+@since 17/06/2025
+@return object, retorna a instancia da classe
+/*/
+method new() class VerificaAcessoUsuario
+return self
+
+/*/{Protheus.doc} ApiFluxoDeCaixa::fluxoDeCaixa
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 17/06/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method VerificaSituacaoUsuario() as logical class VerificaAcessoUsuario
+// Primeiro passo é identificar se o usuário existe no banco de dados do Protheus
+	local jParams 	:= oRest:getPathParamsRequest()
+	local cUsuario	:= iif(Upper(jParams['usuario']) == Upper('admin'), 'administrador', jParams['usuario'])
+	local cAlias	:= ::GetDadosUser(cUsuario)
+	local jResponse	:= JSonObject():New()
+ 
+	if (cAlias)->(!Eof())
+		jResponse["USUARIO"] 	:= (cAlias)->USUARIO
+		jResponse["SITUACAO"] 	:= (cAlias)->SITUACAO
+		jResponse["EMAIL"] 		:= (cAlias)->EMAIL
+	else
+		jResponse["USUARIO"] 	:= "NAO ENCONTRADO"
+		jResponse["SITUACAO"] 	:= ""
+		jResponse["EMAIL"] 		:= ""
+	endif
+
+	oRest:SetResponse(jResponse:ToJson())
+
+	(cAlias)->(DbCloseArea())
+return .t.
+
+method GetDadosUser(cUsuario) as character class VerificaAcessoUsuario
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+	local oExec		:= nil
+
+	cQuery += "SELECT" + CRLF
+	cQuery += "		USUARIO.USR_ID AS USUARIO," + CRLF
+	cQuery += "		USUARIO.USR_EMAIL AS EMAIL," + CRLF
+	cQuery += "		CASE" + CRLF
+	cQuery += "			WHEN" + CRLF
+	cQuery += "				USUARIO.USR_MSBLQD = 1 OR USUARIO.USR_MSBLQL = 1" + CRLF
+	cQuery += "			THEN" + CRLF
+	cQuery += "				'BLOQUEADO'" + CRLF
+	cQuery += "			ELSE" + CRLF
+	cQuery += "				'NORMAL'" + CRLF
+	cQuery += "		END AS SITUACAO" + CRLF
+
+	cQuery += "FROM SYS_USR USUARIO" + CRLF
+
+	cQuery += "WHERE" + CRLF
+	cQuery += "		1 = 1" + CRLF
+	cQuery += "		AND UPPER(USUARIO.USR_CODIGO) = UPPER('" + cUsuario + "')" + CRLF
+	cQuery += "		AND USUARIO.D_E_L_E_T_ = ' '" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+/*/{Protheus.doc} ApiFluxoDeCaixa::fluxoDeCaixa
+API Fluxo de caixa drill down
+@type method
+@version 12.1.2410
+@author Felipe Silva.
+@since 17/06/2025
+@return logical, true se a consulta ocorreu com sucesso e false se houve erro
+/*/
+method VerificaRotinasUsuario() as logical class VerificaAcessoUsuario
+// Primeiro passo é identificar se o usuário existe no banco de dados do Protheus
+	local jParams 	:= oRest:getPathParamsRequest()
+	local cUsuario	:= iif(Upper(jParams['usuario']) == Upper('admin'), 'Administrador', jParams['usuario'])
+	local aRotMenu 	:= StrToKarr(SuperGetMv("ZZ_ROTAPP",, "APPCODBAR,APPPRODUCAO,APPMOD2"), ",")
+	local cAlias	:= ::GetRotinasUser(cUsuario, aRotMenu)
+	local jResponse	:= JSonObject():New()
+	local aRotinas 	:= {}
+	local cAliUsr	:= ""
+	local nI 		:= 0
+	local cAliCB5	:= ::getCB5Cad()
+	local aPriters	:= {}
+ 
+	if Upper(cUsuario) == Upper('Administrador')
+		cAliUsr				:= ::GetUsrCad(cUsuario)
+
+		jResponse['USUARIO']	:= AllTrim((cAliUsr)->USUARIO)
+		jResponse['EMAIL']		:= AllTrim((cAliUsr)->EMAIL)
+
+		for nI := 1 to Len(aRotMenu)
+			aAdd(aRotinas, AllTrim(aRotMenu[nI]))
+		next nI
+
+		jResponse['ROTINAS']	:= aRotinas
+
+		(cAliUsr)->(DbCloseArea())
+	else
+		if (cAlias)->(!Eof())
+			jResponse['USUARIO']	:= AllTrim((cAlias)->USUARIO)
+			jResponse['EMAIL'] 		:= AllTrim((cAlias)->EMAIL)
+
+			(cAlias)->(DbGoTop())
+			while (cAlias)->(!Eof())
+				aAdd(aRotinas, AllTrim((cAlias)->FUNCAO))
+
+				(cAlias)->(DbSkip())
+			enddo
+
+			jResponse['ROTINAS'] := aRotinas
+		else
+			cAliUsr					:= ::GetUsrCad(cUsuario)
+
+			jResponse['USUARIO']	:= AllTrim((cAliUsr)->USUARIO)
+			jResponse['EMAIL'] 		:= AllTrim((cAliUsr)->EMAIL)
+			jResponse['ROTINAS']	:= aRotinas
+
+			(cAliUsr)->(DbCloseArea())
+		endif
+	endif
+
+	while (cAliCB5)->(!Eof())
+		aAdd(aPriters, {AllTrim((cAliCB5)->CB5_CODIGO), AllTrim((cAliCB5)->CB5_DESCRI)})
+
+		(cAliCB5)->(DbSkip())
+	enddo
+
+	(cAliCB5)->(DbCloseArea())
+
+	jResponse['PRINTERS']	:= aPriters
+
+	oRest:SetResponse(jResponse:ToJson())
+
+	(cAlias)->(DbCloseArea())
+return .t.
+
+method GetRotinasUser(cUsuario, aRotMenu) as character class VerificaAcessoUsuario
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+	local oExec		:= nil
+	local cRotIn	:= ""
+	local nI 		:= 0
+
+	for nI := 1 to Len(aRotMenu)
+		if !Empty(cRotIn)
+			cRotIn += ","
+		endif
+
+		cRotIn += "'" + AllTrim(aRotMenu[nI]) + "'"
+	next nI
+
+	cQuery += "SELECT DISTINCT" + CRLF
+	cQuery += "		USUARIO.USR_CODIGO AS USUARIO," + CRLF
+	cQuery += "		USUARIO.USR_EMAIL AS EMAIL," + CRLF
+	cQuery += "		MENU_FUNCAO.F_FUNCTION AS FUNCAO" + CRLF
+
+	cQuery += "FROM SYS_USR USUARIO" + CRLF
+
+	cQuery += "INNER JOIN SYS_USR_MODULE USR_MODULE" + CRLF
+	cQuery += "		ON 1 = 1" + CRLF
+	cQuery += "		AND USR_MODULE.USR_ID = USUARIO.USR_ID" + CRLF
+	cQuery += "		AND USR_MODULE.USR_CODMOD = 'SIGAESP'" + CRLF
+	cQuery += "		AND USR_MODULE.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "INNER JOIN MPMENU_MENU MENU" + CRLF
+	cQuery += "		ON 1 = 1" + CRLF
+	cQuery += "		AND MENU.M_ID = USR_MODULE.USR_ARQMENU" + CRLF
+	cQuery += "		AND MENU.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "INNER JOIN MPMENU_ITEM MENU_ITEM" + CRLF
+	cQuery += "		ON 1 = 1" + CRLF
+	cQuery += "		AND MENU_ITEM.I_ID_MENU = MENU.M_ID" + CRLF
+	cQuery += "		AND MENU_ITEM.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "INNER JOIN MPMENU_FUNCTION MENU_FUNCAO" + CRLF
+	cQuery += "		ON 1 = 1" + CRLF
+	cQuery += "		AND MENU_FUNCAO.F_ID = MENU_ITEM.I_ID_FUNC" + CRLF
+	cQuery += "		AND MENU_FUNCAO.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "WHERE" + CRLF
+	cQuery += "		1 = 1" + CRLF
+	cQuery += "		AND UPPER(USUARIO.USR_CODIGO) = UPPER('" + cUsuario + "')" + CRLF
+	cQuery += "		AND MENU_FUNCAO.F_FUNCTION IN (" + cRotIn + ")" + CRLF
+	cQuery += "		AND USUARIO.D_E_L_E_T_ = ' '" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+method GetUsrCad(cUsuario) as character class VerificaAcessoUsuario
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT DISTINCT" + CRLF
+	cQuery += "		USUARIO.USR_CODIGO AS USUARIO," + CRLF
+	cQuery += "		USUARIO.USR_EMAIL AS EMAIL" + CRLF
+
+	cQuery += "FROM SYS_USR USUARIO" + CRLF
+
+	cQuery += "WHERE" + CRLF
+	cQuery += "		1 = 1" + CRLF
+	cQuery += "		AND UPPER(USUARIO.USR_CODIGO) = UPPER('" + cUsuario + "')" + CRLF
+	cQuery += "		AND USUARIO.D_E_L_E_T_ = ' '" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias
+
+method GetCB5Cad() as character class VerificaAcessoUsuario
+	local cAlias 	:= ""
+	local cQuery 	:= ""
+
+	cQuery += "SELECT " + CRLF
+	cQuery += "		CB5.CB5_CODIGO," + CRLF
+	cQuery += "		CB5.CB5_DESCRI" + CRLF
+
+	cQuery += "FROM " + RetSqlTab("CB5") + "" + CRLF
+
+	cQuery += "WHERE " + CRLF
+	cQuery += "	1 = 1" + CRLF
+	cQuery += "		AND CB5.CB5_FILIAL = '" + FWxFilial("CB5") + "'"
+	cQuery += "		AND CB5.CB5_TIPO = '4'"
+	cQuery += "		AND CB5.CB5_SERVER <> ' '"
+	cQuery += "		AND CB5.D_E_L_E_T_ = ' '" + CRLF
+
+	cQuery += "ORDER BY" + CRLF
+	cQuery += "		CB5.CB5_CODIGO" + CRLF
+
+	oExec := FwExecStatement():New(ChangeQuery(cQuery))
+
+	cAlias := oExec:OpenAlias()
+return cAlias

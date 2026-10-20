@@ -1,0 +1,200 @@
+#include "totvs.ch"
+
+#define AUTO_FIELD_NAME			01
+#define AUTO_FIELD_CONTENT		02
+
+namespace libLabs
+
+/*/{Protheus.doc} function convDataToJson
+    Rotina para converter array em json formatado
+    @author  Gabriel Pereira
+    @since   19/05/2022
+    @version P12
+
+    @param aAutoCab, Array, Array de cabeçalho no formato {"Titulo", "Valor"} 
+    @param lBeautify, Lógic, Indica se Json terá quebra de linha
+
+    @example
+        libLabs.convDataToJson(aAutoCab, lBeautify)
+
+/*/
+User Function convDataToJson(aAutoCab, lBeautify)
+	Local nField		:= 0
+	Local cField		:= ""
+	Local uContent		:= ""
+	Local cJson 		:= ""
+
+	Default lBeautify	:= .T.
+
+    cJson 	+= '{'
+        
+    If ( lBeautify )
+        cJson += CRLF
+    Endif
+    
+    For nField:=1 to Len(aAutoCab)
+        cField		:= aAutoCab[nField,AUTO_FIELD_NAME]
+        uContent 	:= aAutoCab[nField,AUTO_FIELD_CONTENT]
+
+        cJson  		+= convFieldToJson(cField,uContent)
+
+        If ( nField < Len(aAutoCab) )
+            cJson 	+= ','
+        Endif
+        If ( lBeautify )
+            cJson += CRLF
+        Endif
+    Next nField
+    
+    cJson 	+= '}'
+    
+    If ( lBeautify )
+        cJson += CRLF
+    Endif
+Return cJson
+
+/*/{Protheus.doc} function convFieldToJson
+    Rotina para converter array do em formato json
+    @author  Gabriel Pereira
+    @since   19/05/2022
+    @version P12
+
+    @param cField, Parâmetro contendo o titulo do campos
+    @param uContent, Parâmetro contendo o valor do campos
+
+    @sample
+        convFieldToJson("Produto", "xxxxxx")
+
+    @return cStrReturn, Retorna string formatada:
+        "Produto": "xxxxxx"
+/*/
+Static Function convFieldToJson(cField, uContent)
+	Local cType			:= ""
+	Local lUseAspas		:= .T.
+	Local cStrReturn	:= ""
+	
+	cType := ValType(uContent)
+
+	Do Case
+		Case ( cType == "U" )
+			uContent 	:= "null"
+			lUseAspas	:= .F.
+		Case ( cType $ "C,M" )
+			uContent := AllTrim(uContent)
+			If ( uContent == "null" )
+				lUseAspas:= .F.
+			Endif
+			//Retira Aspas do Conteúdo
+			If ( '"' $ uContent .And. !( "{" $ uContent)  )
+				uContent := StrTran(uContent,'"',"'")
+			Endif
+			If ( "{" $ uContent ) 
+				lUseAspas:= .F.
+			Endif
+		Case ( cType == "L" )
+			uContent := Iif(uContent,"true","false")
+			lUseAspas:= .F.
+        Case ( cType == "N" )
+			uContent := AllTrim(cValToChar(uContent))
+			lUseAspas:= .F.
+		Case ( cType == "D" )
+			If ( !Empty(uContent) )
+				uContent := DtoS(uContent)
+				uContent := Substr(uContent,1,4) + "-" + Substr(uContent,5,2)  + "-" + Substr(uContent,7,2)
+			Else
+				uContent := ""
+			Endif
+	EndCase
+
+	If ( !Empty(cField) )
+		cStrReturn	+= '"' + cField + '"'
+		cStrReturn	+= ':'
+	Endif
+	
+	If ( lUseAspas )
+		cStrReturn	+= '"'
+	Endif
+	
+	cStrReturn	+= AllTrim(AllToChar(uContent))
+	
+	If ( lUseAspas )
+		cStrReturn	+= '"'
+	Endif
+	
+Return cStrReturn
+
+/*/{Protheus.doc} function getValueCombo
+    Rotina para retornar valor do combo X3_CBOX
+    @author  Gabriel Pereira
+    @since   19/05/2022
+    @version P12
+
+    @param cCampo, Parâmetro contendo o campos a ser processado o valor
+    @param cChave, Parâmetro contendo a valor chave para busca
+
+    @exemple
+        libLabs.getValueCombo("B1_TIPOCQ", "M")
+    
+    @return cValue, string com o valor do box
+        getValueCombo("B1_TIPOCQ", "M") = "Materiais"
+/*/
+User Function getValueCombo(cCampo as character, cChave)
+    Local cValue    := ""
+    Local aCombo    := {}
+    Local nContador := 0 
+
+    aCombo := RetSX3Box(GetSX3Cache(cCampo, "X3_CBOX"),,,1)
+
+    For nContador := 1 To Len(aCombo)
+        If Alltrim(cChave) == aCombo[nContador][2]
+            cValue := aCombo[nContador][3]
+            Exit
+        EndIf
+    Next nContador
+Return 
+
+/*/{Protheus.doc} function sendMsgFault
+    Retorna mensagem de erro para a API
+    @author  Gabriel Pereira
+    @since   19/05/2022
+    @version P12
+
+    @param oRest, Arquivo REST em execução
+    @param cMsg, Mesagem de retorno
+    @param nCode, Status Code de Retorno
+/*/
+User Function sendMsgFault(oRest as object,cMsg as character, nCode as numeric)
+	Local aAutoCab	:= {} as array
+	Local cJson		:= "" as character
+	
+	FWLogMsg(cMsg)
+
+	aAdd( aAutoCab , {"code", nCode} )
+	aAdd( aAutoCab , {"message", cMsg } )
+	cJson := libLabs.u_convDataToJson(aAutoCab)
+
+	oRest:setResponse(cJson)
+	oRest:setStatusCode(nCode)
+
+Return
+
+/*
+    
+*/
+User Function buildData(jBody as Json, oHashFields as Object) as Array
+    Local aData as Array
+    Local aFields as Array
+    Local nField as Numeric
+    Local cField as Character
+
+    aData := {}
+    aFields := {}
+
+    aFields := jBody:GetNames()
+
+    For nField := 1 To Len(aFields)
+        If oHashFields:get(aFields[nField], @cField)
+            aAdd(aData, {cField, jBody[aFields[nField]]})
+        EndIf
+    Next
+Return aData

@@ -1,0 +1,105 @@
+#include 'totvs.ch'
+#include 'topconn.ch'
+#include 'Dbstruct.ch'
+/*/{Protheus.doc} IPXlsxQry
+Classe para gerar arquivo excel a partir de uma query
+@type class
+@version 12.1.23
+@author Tiago Faria
+@since 5/15/2024
+/*/
+class IPXlsxQry from IPXlsx
+	public method new()
+	public method exportAliasToXlsx()
+	public method exportQueryToXlsx()
+end class
+
+method new(cFile) class IPXlsxQry
+	_Super:new(cFile)
+return self
+/*/{Protheus.doc} IPXlsxQry::exportAliasToXlsx
+Exporta os dados do alias recebido por parametro para linhas do arquivo XLSX
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 5/15/2024
+@param cAlias, character, ID do alias
+@param cSheetName, character, Nome da aba do excel que deve sair as linhas da query
+@param lImpHeader, logical, Indica se deve imprimir na 1ª linha o cabeçalho do arquivo, é tomado como base o nome fisíco das colunas do alias recebido por parametro
+@param lCloseAlias, logical, se true indica que deve fechar a area do alias recebido por parametro
+@param oIPXlsxConvert, object, classe para modificar algum valor da query via ADVPL caso necessário
+@param oIPXlsxFormat, object, classe para modificar o formato de MILHAR da celula caso necessário
+/*/
+method exportAliasToXlsx(cAlias,cSheetName,lImpHeader,lCloseAlias,oIPXlsxConvert,oIPXlsxFormat) class IPXlsxQry
+	local aFields          := (cAlias)->(dbStruct())
+	local nField           := 0
+	local aLineHeader      := {}
+	local aLineHeaderName  := {}
+	local aLine            := {}
+	default lImpHeader     := .t.
+	default lCloseAlias    := .t.
+	default oIPXlsxConvert := IPXlsxConvert():Default()
+	default oIPXlsxFormat  := IPXlsxFormat():Default()
+
+	if lImpHeader
+
+		for nField := 1 to len(aFields)
+			cField := aFields[nField][DBS_NAME]
+			cTitle := getSX3Cache(cField,"X3_TITULO")
+			if !empty(cTitle)
+				aAdd(aLineHeader,upper(alltrim(cTitle)))
+			else
+				aAdd(aLineHeader,cField)
+			endif
+			aAdd(aLineHeaderName,aFields[nField][DBS_NAME])
+
+		next nField
+
+		_Super:SetFont(FwPrinterFont():Calibri(), 11/*nSize*/, .f./*lItalic*/, .t./*lBold*/, .f./*lUnderlined*/)
+		_Super:addLine(cSheetName,aLineHeader,/*lCalculateCellWidth*/,/*oIPXlsxFormat*/,aLineHeaderName)
+		_Super:ResetFont()
+	else
+		/*adiciona uma linha em branco para a impressão ignorar a linha 1 do header
+		pois quando o lImpHeader é false indica que o usuário irá fazer o cabeçalho manualmente
+		*/
+		_Super:addLine(cSheetName,aLine)
+	endif
+
+	while (cAlias)->(!Eof())
+		aLine := {}
+
+		for nField := 1 to len(aFields)
+			xValue := (cAlias)->(fieldGet(nField))
+			if (valType(xValue) == "C")
+				xValue := alltrim(xValue)
+			endif
+
+			xValue := oIPXlsxConvert:convert(xValue,aFields[nField][DBS_NAME],cAlias,cSheetName)
+
+			aAdd(aLine,xValue)
+		next nField
+
+		_Super:addLine(cSheetName,aLine,/*lCalculateCellWidth*/,oIPXlsxFormat,aLineHeaderName)
+
+		(cAlias)->(dbSkip())
+	enddo
+
+	if lCloseAlias
+		(cAlias)->(dbCloseArea())
+	endif
+return
+/*/{Protheus.doc} IPXlsxQry::exportAliasToXlsx
+Exporta os dados de uma query recebido por parametro para linhas do arquivo XLSX
+@type method
+@version 12.1.23
+@author Tiago Faria
+@since 5/15/2024
+@param cAlias, character, ID do alias
+@param cSheetName, character, Nome da aba do excel que deve sair as linhas da query
+@param lImpHeader, logical, Indica se deve imprimir na 1ª linha o cabeçalho do arquivo, é tomado como base o nome fisíco das colunas do alias recebido por parametro
+@param lCloseAlias, logical, se true indica que deve fechar a area do alias recebido por parametro
+/*/
+method exportQueryToXlsx(cQuery, cSheetName,lImpHeader,lCloseAlias,oIPXlsxConvert,oIPXlsxFormat) class IPXlsxQry
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+return ::exportAliasToXlsx(cAlias,cSheetName,lImpHeader,lCloseAlias,oIPXlsxConvert,oIPXlsxFormat)
+

@@ -1,0 +1,22 @@
+#include "rwmake.ch"  
+
+//////////////////////////////////////////////////////////////////////////////////
+//                              												//
+//  Retorna o Código do Banco conforme o Código de Barras ou Linha Digitável.  	//
+//                              												//
+//////////////////////////////////////////////////////////////////////////////////
+
+User Function PagBan()
+
+// Declaração das Variáveis.
+Local _cBanco	:= ""
+
+If !Empty(SE2->E2_CODBAR)
+	_cBanco := Substr(SE2->E2_CODBAR,1,3)
+ElseIf !Empty(SE2->E2_LINDIG)
+	_cBanco	:= Substr(SE2->E2_IPTE,1,3)
+Else
+	_cBanco	:= SA2->A2_BANCO
+EndIf
+
+Return(_cBanco)

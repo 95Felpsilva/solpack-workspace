@@ -1,0 +1,779 @@
+#include "TOTVS.CH"
+#include "topconn.ch"
+#include "SOLFAT04.ch"
+
+namespace faturamento.MonitorCashback
+
+/*/{Protheus.doc} recalculoCashback
+
+Rotina para realizar recálculo de cashback
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+@see SOLFAT04 - Rotina MVC
+/*/
+User Function recalculoCashback(cIDCash, cCodCliente, cLoja)
+    Local cAlias            := "" as character
+    Local cQuery            := "" as character
+    Local cAliasForm 		:= ALIAS_FORM0 as character
+	Local cAlias0Grid	    := ALIAS_GRID0 as character
+	Local cPrefForm			:= PREFIXO_ALIAS_FORM0 as character
+	Local cPref0Grid		:= PREFIXO_ALIAS_GRID0 as character
+	Local cPref1Grid		:= PREFIXO_ALIAS_GRID1 as character
+    Local cCpoFFilial		:= cPrefForm+"_FILIAL" as character
+    Local cCpoFID		    := cPrefForm+"_ID" as character
+    Local cCpoFCliente		:= cPrefForm+"_CLIENT" as character
+	Local cCpoFLoja		    := cPrefForm+"_LOJA" as character
+    Local cCpoFValor		:= cPrefForm+"_VALOR" as character
+	Local cCpoG0Filial      := cPref0Grid+"_FILIAL" as character
+	Local cCpoG0IDCash      := cPref0Grid+"_IDCASH" as character
+	Local cCpoG0Produto     := cPref0Grid+"_PRODUT" as character
+	Local cCpoG0Valor       := cPref0Grid+"_VALOR" as character
+	Local cCpoG1IDCash      := cPref1Grid+"_IDCASH" as character
+    Local nValorCash        := 0 as numeric
+    Local nTotalCash        := 0 as numeric
+
+    Default cIDCash         := ""
+    Default cCodCliente     := ""
+    Default cLoja           := ""
+    
+    If ( !Empty(cCodCliente) .And. !Empty(cCodCliente) )
+        cIDCash := Posicione(cAliasForm,3,xFilial(cAliasForm)+AvKey(cCodCliente, cCpoFCliente)+AvKey(cLoja, cCpoFLoja), cCpoFID) 
+    EndIf
+
+    cQuery := getItensCash(cIDCash)
+
+    TcQuery cQuery New Alias (cAlias:=GetNextAlias())
+
+    If (faturamento.MonitorCashback.clearSaldo(cIDCash))
+        If (cAlias)->(!Eof())
+            While (cAlias)->(!Eof())
+                nValorCash := Iif((cAlias)->VALOR > 0, (cAlias)->VALOR, 0)
+
+                nTotalCash += nValorCash
+
+                DBSelectArea(cAlias0Grid)
+                (cAlias0Grid)->(DBSetOrder(1))
+                If (cAlias0Grid)->(MsSeek((cAlias)->FILIAL+(cAlias)->ID+(cAlias)->PRODUTO))
+                    RecLock(cAlias0Grid, .F.)
+                        (cAlias0Grid)->&cCpoG0Valor := nValorCash
+                    (cAlias0Grid)->(MsUnlock())
+                Else
+                    RecLock(cAlias0Grid, .T.)
+                        (cAlias0Grid)->&cCpoG0Filial := (cAlias)->FILIAL
+                        (cAlias0Grid)->&cCpoG0IDCash := (cAlias)->ID
+                        (cAlias0Grid)->&cCpoG0Produto := (cAlias)->PRODUTO
+                        (cAlias0Grid)->&cCpoG0Valor := nValorCash
+                    (cAlias0Grid)->(MsUnlock())
+                EndIf
+
+                (cAlias)->(DBSkip())
+
+                (cAlias0Grid)->(DBCloseArea())
+            EndDo
+
+            DBSelectArea(cAliasForm)
+
+            RecLock(cAliasForm, .F.)
+                (cAliasForm)->&cCpoFValor := nTotalCash
+            (cAliasForm)->(MsUnlock())
+            
+            (cAliasForm)->(DBCloseArea())
+        EndIf
+    EndIf
+    
+    (cAlias)->(DBCloseArea())
+    
+Return
+
+/*
+    Monta query de consulta 
+*/
+Static Function getItensCash(cIDCash) as character
+    Local cQuery            := "" as character
+    Local cAliasForm 		:= ALIAS_FORM0 as character
+	Local cAlias1Grid 		:= ALIAS_GRID1 as character
+	Local cPrefForm			:= PREFIXO_ALIAS_FORM0 as character
+	Local cPref1Grid		:= PREFIXO_ALIAS_GRID1 as character
+
+    cQuery += " WITH ENTRADAS AS( " + CRLF
+    cQuery += " 	SELECT " + CRLF
+    cQuery += " 		" + cPref1Grid + "_FILIAL " + CRLF
+    cQuery += " 		," + cPref1Grid + "_IDCASH " + CRLF
+    cQuery += " 		," + cPref1Grid + "_PRODUT " + CRLF
+    cQuery += " 		,SUM(" + cPref1Grid + "_VALOR) TOTAL " + CRLF
+    cQuery += " 	FROM " + CRLF
+    cQuery += " 		" + RetSqlTab(cAlias1Grid) + CRLF
+    cQuery += " 	WHERE " + CRLF
+    cQuery += " 		1 = 1 " + CRLF
+    cQuery += " 		AND " + RetSqlFil(cAlias1Grid) + CRLF
+    cQuery += " 		AND " + cPref1Grid + "_IDCASH = " + ValToSql(cIDCash) + CRLF
+    cQuery += " 		AND " + cPref1Grid + "_TPMOV = '1' " + CRLF
+    cQuery += " 		AND " + RetSqlDel(cAlias1Grid) + CRLF
+    cQuery += " 	GROUP BY " + CRLF
+    cQuery += " 		" + cPref1Grid + "_FILIAL " + CRLF
+    cQuery += " 		," + cPref1Grid + "_IDCASH " + CRLF
+    cQuery += " 		," + cPref1Grid + "_PRODUT " + CRLF
+    cQuery += " ), " + CRLF
+
+    cQuery += " SAIDAS AS ( " + CRLF
+    cQuery += " 	SELECT " + CRLF
+    cQuery += " 		" + cPref1Grid + "_FILIAL " + CRLF
+    cQuery += " 		," + cPref1Grid + "_IDCASH " + CRLF
+    cQuery += " 		," + cPref1Grid + "_PRODUT " + CRLF
+    cQuery += " 		,SUM(" + cPref1Grid + "_VALOR) TOTAL " + CRLF
+    cQuery += " 	FROM " + CRLF
+    cQuery += " 		" + RetSqlTab(cAlias1Grid) + CRLF
+    cQuery += " 	WHERE " + CRLF
+    cQuery += " 		1 = 1 " + CRLF
+    cQuery += " 		AND " + RetSqlFil(cAlias1Grid) + CRLF
+    cQuery += " 		AND " + cPref1Grid + "_IDCASH = " + ValToSql(cIDCash) + CRLF
+    cQuery += " 		AND " + cPref1Grid + "_TPMOV IN ('2', '3') " + CRLF
+    cQuery += " 		AND " + RetSqlDel(cAlias1Grid) + CRLF
+    cQuery += " 	GROUP BY " + CRLF
+    cQuery += " 		" + cPref1Grid + "_FILIAL " + CRLF
+    cQuery += " 		," + cPref1Grid + "_IDCASH " + CRLF
+    cQuery += " 		," + cPref1Grid + "_PRODUT " + CRLF
+    cQuery += " ), " + CRLF
+
+    cQuery += " PRODUTOS AS ( " + CRLF
+    cQuery += " 	SELECT " + CRLF
+    cQuery += " 		" + cPref1Grid + "_FILIAL " + CRLF
+    cQuery += " 		," + cPref1Grid + "_IDCASH " + CRLF
+    cQuery += " 		," + cPref1Grid + "_PRODUT " + CRLF
+    cQuery += " 	FROM " + CRLF
+    cQuery += " 		ENTRADAS " + CRLF
+    cQuery += " 	UNION " + CRLF
+    cQuery += " 	SELECT " + CRLF
+    cQuery += " 		" + cPref1Grid + "_FILIAL " + CRLF
+    cQuery += " 		," + cPref1Grid + "_IDCASH " + CRLF
+    cQuery += " 		," + cPref1Grid + "_PRODUT " + CRLF
+    cQuery += " 	FROM " + CRLF
+    cQuery += " 		ENTRADAS " + CRLF
+    cQuery += " ) " + CRLF
+
+    cQuery += " SELECT " + CRLF
+    cQuery += " 	" + cPrefForm + "_FILIAL FILIAL " + CRLF
+    cQuery += "     ," + cPrefForm + "_ID ID " + CRLF
+    cQuery += " 	,PRD." + cPref1Grid + "_PRODUT PRODUTO " + CRLF
+    cQuery += " 	,(COALESCE(ENT.TOTAL, 0) - COALESCE(SAI.TOTAL, 0)) VALOR " + CRLF
+    cQuery += " FROM " + CRLF
+    cQuery += " 	" + RetSqlTab(cAliasForm) + CRLF
+
+    cQuery += " 	INNER JOIN PRODUTOS PRD ON 1 = 1 " + CRLF
+    cQuery += " 		AND PRD." + cPref1Grid + "_FILIAL = " + cAliasForm + "." + cPrefForm + "_FILIAL " + CRLF
+    cQuery += " 		AND PRD." + cPref1Grid + "_IDCASH = " + cAliasForm + "." + cPrefForm + "_ID " + CRLF
+
+    cQuery += " 	LEFT JOIN ENTRADAS ENT ON 1 = 1 " + CRLF
+    cQuery += " 		AND ENT." + cPref1Grid + "_FILIAL = " + cAliasForm + "." + cPrefForm + "_FILIAL " + CRLF
+    cQuery += " 		AND ENT." + cPref1Grid + "_IDCASH = " + cAliasForm + "." + cPrefForm + "_ID " + CRLF
+    cQuery += " 		AND ENT." + cPref1Grid + "_PRODUT = PRD." + cPref1Grid + "_PRODUT " + CRLF
+
+    cQuery += " 	LEFT JOIN SAIDAS SAI ON 1 = 1 " + CRLF
+    cQuery += " 		AND SAI." + cPref1Grid + "_FILIAL = " + cAliasForm + "." + cPrefForm + "_FILIAL " + CRLF
+    cQuery += " 		AND SAI." + cPref1Grid + "_IDCASH = " + cAliasForm + "." + cPrefForm + "_ID " + CRLF
+    cQuery += " 		AND SAI." + cPref1Grid + "_PRODUT = PRD." + cPref1Grid + "_PRODUT " + CRLF
+
+    cQuery += " WHERE " + CRLF
+    cQuery += " 	1 = 1 " + CRLF
+    cQuery += "     AND " + RetSqlFil(cAliasForm) + CRLF
+    cQuery += "     AND " + cPrefForm + "_ID = " + ValToSql(cIDCash) + CRLF
+    cQuery += "     AND " + RetSqlDel(cAliasForm) + CRLF
+
+Return cQuery
+
+/*
+    Rotina para limpar saldo dos produtos
+*/
+Static Function clearSaldo(cIDCash) as logical
+    Local lRet              := .T. as logical
+    Local cQuery            := "" as character
+	Local cAlias0Grid	    := ALIAS_GRID0 as character
+	Local cPref0Grid		:= PREFIXO_ALIAS_GRID0 as character
+	Local cCpoG0Valor       := cPref0Grid+"_VALOR" as character
+	Local cCpoG0ID          := cPref0Grid+"_IDCASH" as character
+
+    cQuery += " UPDATE " + CRLF
+    cQuery += "     " + RetSqlName(cAlias0Grid) + CRLF
+    cQuery += " SET " + CRLF
+    cQuery += "     " + cCpoG0Valor + " = 0 " + CRLF
+    cQuery += " WHERE " + CRLF
+    cQuery += "     1 = 1 " + CRLF
+    cQuery += "     AND " + cCpoG0ID + " = " + ValToSql(cIDCash) + CRLF
+    cQuery += "     AND D_E_L_E_T_ = ' '" + CRLF
+
+	If ( TcSqlExec(cQuery) < 0 )
+        lRet := .F.
+    EndIf
+
+Return lRet
+
+/*/{Protheus.doc} createCliente
+
+Rotina responsável por criar cliente no monitor de cashbasck
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+@see SOLFAT04 - Rotina MVC
+@see SOLFAT05 - Movimentações de CashBack
+/*/
+User Function createCliente(cCodCliente, cLojaCliente) as logical
+    Local cNewID            := "" as character
+	Local cAliasForm 		:= ALIAS_FORM0 as character
+	Local cPrefForm			:= PREFIXO_ALIAS_FORM0 as character
+	Local cCpoFID		    := cPrefForm+"_ID" as character
+    Local lRet              := .F. as logical
+    
+    Default cCodCliente     := ""
+    Default cLojaCliente    := ""
+
+    cNewID := NextNumero(cAliasForm, 1, cCpoFID, .T.)
+
+    If !Empty(cNewID)
+        RecLock(cAliasForm, .T.)
+            (cAliasForm)->&(cPrefForm+"_FILIAL")    := xFilial(cAliasForm)
+            (cAliasForm)->&(cPrefForm+"_ID")        := cNewID
+            (cAliasForm)->&(cPrefForm+"_CLIENT")    := cCodCliente
+            (cAliasForm)->&(cPrefForm+"_LOJA")      := cLojaCliente
+            (cAliasForm)->&(cPrefForm+"_DATA")      := Date()
+            (cAliasForm)->&(cPrefForm+"_HORA")      := Time()
+        (cAliasForm)->(MsUnlock())
+
+        lRet := .T.
+    EndIf
+
+    (cAliasForm)->(DBSetOrder(1))
+    lRet := (cAliasForm)->(MsSeek(xFilial(cAliasForm)+cNewID))
+
+Return lRet
+
+/*/{Protheus.doc} getSaldoProdutoCash
+
+Rotina responsável por buscar saldo de cashback por produto
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+@see SOLFAT04 - Rotina MVC
+@see SOLFAT05 - Movimentações de CashBack
+/*/
+User Function getSaldoProdutoCash(cIDCash, cCodProduto, cNumPV)
+    Local nSaldo        := 0
+    Local cQuery        := ""
+    Local cAlias        := ""
+
+    cQuery := getSaldoCash(cIDCash, cCodProduto, cNumPV)
+
+    TcQuery cQuery New Alias (cAlias:=GetNextAlias())
+
+    If (cAlias)->(!Eof())
+        nSaldo := (cAlias)->SALDO
+    EndIf
+
+    (cAlias)->(DBCloseArea())
+
+Return nSaldo
+
+/*
+    Monta query de consulta de saldo de cashback por produto
+*/
+Static Function getSaldoCash(cIDCash, cCodProduto, cNumPV)  as character
+    Local cQuery        := "" as character
+    Local cAlias0Grid	:= ALIAS_GRID0 as character
+	Local cPref0Grid	:= PREFIXO_ALIAS_GRID0 as character
+
+    cQuery += " SELECT " + CRLF
+    cQuery += "     " + cPref0Grid + "_VALOR SALDO" + CRLF
+    cQuery += " FROM " + CRLF
+    cQuery += "     " + RetSqlTab(cAlias0Grid) + CRLF
+    cQuery += " WHERE " + CRLF
+    cQuery += "     1 = 1 " + CRLF
+    cQuery += "     AND " + RetSqlFil(cAlias0Grid) + CRLF
+    cQuery += "     AND " + cPref0Grid + "_IDCASH = " + ValToSQL(cIDCash) + CRLF
+    cQuery += "     AND " + cPref0Grid + "_PRODUT = " + ValToSQL(cCodProduto) + CRLF
+    cQuery += "     AND " + RetSqlDel(cAlias0Grid) + CRLF
+
+Return cQuery
+
+/*/{Protheus.doc} createMoviment
+
+Rotina para criação de movimentação de cashback
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+@see SOLFAT04 - Rotina MVC
+@see SOLFAT05 - Movimentações de CashBack
+/*/
+User Function createMoviment(cTipoMovi, cIDCash, cCodProduto, nValor, cFilPV, cPedido, cItemPV, lPosiciona)
+    Local cNewIDMov         := "" as character
+	Local cAliasForm 		:= ALIAS_FORM0 as character
+	Local cAlias1Grid	    := ALIAS_GRID1 as character
+	Local cPrefForm			:= PREFIXO_ALIAS_FORM0 as character
+	Local cPref1Grid		:= PREFIXO_ALIAS_GRID1 as character
+    Local cCpoG1IDMovi      := cPref1Grid+"_IDMOVI" as character
+    Local cCodCliente       := "" as character
+    Local cLojaCliente      := "" as character
+    Local nPorcentCash      := 0 as numeric
+    Local lRet              := .F. as logical
+
+    Default cTipoMovi       := ""
+    Default cIDCash         := ""
+    Default cCodProduto     := ""
+    Default nValor          := 0
+    Default lPosiciona      := .F.
+
+    (cAliasForm)->(DBSetOrder(1))
+    If ((cAliasForm)->(MsSeek(xFilial(cAliasForm)+cIDCash)) .And. nValor <> 0)
+        cCodCliente := (cAliasForm)->&(cPrefForm+"_CLIENT")
+        cLojaCliente := (cAliasForm)->&(cPrefForm+"_LOJA")
+        
+        nPorcentCash := faturamento.MonitorCashback.u_getPorcentCashback(cIDCash, cCodProduto, cCodCliente, cLojaCliente)
+        
+        If (cTipoMovi == MOVIMENTO_ENTRADA)
+            nValor := ( (nPorcentCash / 100) * nValor )
+        EndIf
+    
+        DBSelectArea(cAlias1Grid)
+        cNewIDMov := NextNumero(cAlias1Grid, 1, cCpoG1IDMovi, .T.)
+
+        If !Empty(cNewIDMov)
+
+            RecLock(cAlias1Grid, .T.)
+                (cAlias1Grid)->&(cPref1Grid+"_FILIAL")  := xFilial(cAlias1Grid)
+                (cAlias1Grid)->&(cPref1Grid+"_IDCASH")  := cIDCash
+                (cAlias1Grid)->&(cPref1Grid+"_IDMOVI")  := cNewIDMov
+                (cAlias1Grid)->&(cPref1Grid+"_TPMOV")   := cTipoMovi
+                (cAlias1Grid)->&(cPref1Grid+"_CLIENT")  := cCodCliente
+                (cAlias1Grid)->&(cPref1Grid+"_LOJA")    := cLojaCliente
+                (cAlias1Grid)->&(cPref1Grid+"_PRODUT")  := cCodProduto
+                (cAlias1Grid)->&(cPref1Grid+"_VALOR")   := nValor
+                (cAlias1Grid)->&(cPref1Grid+"_FILPED")  := cFilPV
+                (cAlias1Grid)->&(cPref1Grid+"_PV")      := cPedido
+                (cAlias1Grid)->&(cPref1Grid+"_ITEMPV")  := cItemPV
+                (cAlias1Grid)->&(cPref1Grid+"_VALOR")   := nValor
+                (cAlias1Grid)->&(cPref1Grid+"_DATA")    := Date()
+                (cAlias1Grid)->&(cPref1Grid+"_HORA")    := Time()
+            (cAlias1Grid)->(MsUnlock())
+
+            lRet := .T.
+
+            faturamento.MonitorCashback.u_recalculoCashback(cIDCash)
+        EndIf
+
+        (cAlias1Grid)->(DBCloseArea())
+
+        If lPosiciona
+            (cAlias1Grid)->(DBSetOrder(1))
+            lRet := (cAlias1Grid)->(MsSeek(xFilial(cAlias1Grid)+AvKey(cIDCash, "ZF3_IDCASH")+AvKey(cNewIDMov, "ZF3_IDMOVI")))
+        EndIf
+    EndIf
+
+Return lRet
+
+/*/{Protheus.doc} convertValuePorcent
+
+Converte valor original para novo valor descontando a porcentagem de cashback
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+@see SOLFAT04 - Rotina MVC
+@see SOLFAT05 - Movimentações de CashBack
+/*/
+User Function convertValuePorcent(cIDCash as character, cCodProduto as character, cCodCliente as character, cLojaCliente as character, nValor as numeric) as numeric
+    Local nPorcentCash      := 0 as numeric
+
+    nPorcentCash := faturamento.MonitorCashback.u_getPorcentCashback(cIDCash, cCodProduto, cCodCliente, cLojaCliente)
+
+    nValor := ( (nPorcentCash / 100) * nValor )
+
+Return nValor
+
+/*/{Protheus.doc} getPorcentCashback
+
+Rotina para recuperar o valor de retorno do cashback
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+@see SOLFAT04 - Rotina MVC
+@see SOLFAT05 - Movimentações de CashBack
+/*/
+User Function getPorcentCashback(cIDCash, cCodProduto, cCodCliente, cLojaCliente)
+	Local cAliasForm 		:= ALIAS_FORM0 as character
+    Local nPorcent          := 0 as numeric
+    Local nDefultPorcent    := GetNewPar("ES_PRCCASH", 1) as numeric
+
+    (cAliasForm)->(DBSetOrder(1))
+    If ((cAliasForm)->(MsSeek(xFilial(cAliasForm)+cIDCash)))
+        SB1->(DBSetOrder(1))
+        If (SB1->(FieldPos("B1_ZPRCASH")) > 0 .And. nPorcent == 0 )
+            If (SB1->(MsSeek(xFilial("SB1")+AvKey(cCodProduto, "B1_COD"))))
+                If !Empty(SB1->B1_ZPRCASH)
+                    nPorcent := SB1->B1_ZPRCASH
+                EndIf
+            EndIf
+        EndIf
+        
+        SA1->(DBSetOrder(1))
+        If (SA1->(FieldPos("A1_ZPRCASH")) > 0 .And. nPorcent == 0 )
+            If (SA1->(MsSeek(xFilial("SA1")+AvKey(cCodCliente, "A1_COD")+AvKey(cLojaCliente, "A1_LOJA"))))
+                If !Empty(SA1->A1_ZPRCASH)
+                    nPorcent := SA1->A1_ZPRCASH
+                EndIf
+            EndIf
+        EndIf
+
+        If (nPorcent == 0)
+            nPorcent := nDefultPorcent
+        EndIf
+    Else
+        nPorcent := nDefultPorcent
+    EndIf
+
+Return nPorcent
+
+/*/{Protheus.doc} createMoviment
+
+Rotina de processamento de estorno de movimento cashback
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+@see SOLFAT04 - Rotina MVC
+@see SOLFAT05 - Movimentações de CashBack
+/*/
+User Function deleteMoviment(cIDCash, cCodProduto, cFilPedido, cPedido, cItemPV, cCodCliente, cCodLoja) as logical
+    Local cQuery        := "" as character
+    Local cAlias        := "" as character
+    Local cAlias1Grid	:= ALIAS_GRID1 as character
+    Local lRet          := .T. as logical
+
+    cQuery := getEstornoMov(cIDCash, cCodProduto, cFilPedido, cPedido, cItemPV)
+
+    TcQuery cQuery New Alias (cAlias:=GetNextAlias())
+
+    If (cAlias)->(!Eof())
+        While (cAlias)->(!Eof())
+            DBSelectArea(cAlias1Grid)
+            (cAlias1Grid)->(DBGoTo((cAlias)->RECNO))
+            
+            RecLock(cAlias1Grid, .F.)
+                DbDelete()
+            (cAlias1Grid)->(MsUnlock())
+
+            (cAlias1Grid)->(DBCloseArea())
+
+            (cAlias)->(DBSkip())
+        EndDo
+
+        faturamento.MonitorCashback.u_recalculoCashback(cIDCash,cCodCliente,cCodLoja)
+    EndIf
+
+    (cAlias)->(DBCloseArea())
+
+Return lRet
+
+/*
+    Monta query da remoção dos descontos
+*/
+Static Function getEstornoMov(cIDCash, cCodProduto, cFilPedido, cPedido, cItemPV)
+    Local cQuery        := "" as character
+    Local cAlias1Grid	:= ALIAS_GRID1 as character
+	Local cPref1Grid	:= PREFIXO_ALIAS_GRID1 as character
+
+    cQuery += " SELECT " + CRLF
+    cQuery += "     R_E_C_N_O_ RECNO " + CRLF
+    cQuery += " FROM " + CRLF
+    cQuery += "     " + RetSqlTab(cAlias1Grid) + CRLF
+    cQuery += " WHERE " + CRLF
+    cQuery += "     1 = 1 " + CRLF
+    cQuery += "     AND " + RetSqlFil(cAlias1Grid) + CRLF
+    
+    If !Empty(cIDCash)
+        cQuery += "     AND " + cPref1Grid + "_IDCASH = " + ValToSql(cIDCash) + CRLF
+    EndIf
+    If !Empty(cCodProduto)
+        cQuery += "     AND " + cPref1Grid + "_PRODUT = " + ValToSql(cCodProduto) + CRLF
+    EndIf
+    If !Empty(cFilPedido)
+        cQuery += "     AND " + cPref1Grid + "_FILPED = " + ValToSql(cFilPedido) + CRLF
+    EndIf
+    If !Empty(cPedido)
+        cQuery += "     AND " + cPref1Grid + "_PV = " + ValToSql(cPedido) + CRLF
+    EndIf
+    If !Empty(cItemPV)
+        cQuery += "     AND " + cPref1Grid + "_ITEMPV = " + ValToSql(cItemPV) + CRLF
+    EndIf
+    cQuery += "     AND " + RetSqlDel(cAlias1Grid) + CRLF
+
+Return cQuery
+
+/*/{Protheus.doc} getValorByPV
+
+Rotina para recuparar valores do cashback com base no tipo de movimento e PV
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+@see SOLFAT04 - Rotina MVC
+@see SOLFAT05 - Movimentações de CashBack
+/*/
+User Function getValorByPV(cTpMovimento, cIDCash, cFilPV, cNumPV)
+    Local aValor        := {} as array
+    Local cQuery        := "" as character
+    Local cAlias        := "" as character
+
+    cQuery := getQryValorMov(cTpMovimento, cIDCash, cFilPV, cNumPV)
+
+    TcQuery cQuery New Alias (cAlias:=GetNextAlias())
+
+    If (cAlias)->(!Eof())
+       aAdd(aValor, { (cAlias)->ITEM, (cAlias)->PRODUTO, (cAlias)->VALOR } )
+    EndIf
+
+    (cAlias)->(DBCloseArea())
+
+Return aValor
+
+/*
+    Monta query de busca do valor pelo tipo de movimento
+*/
+Static Function getQryValorMov(cTpMovimento, cIDCash, cFilPV, cNumPV)
+    Local cQuery        := "" as character
+    Local cAlias1Grid	:= ALIAS_GRID1 as character
+	Local cPref1Grid	:= PREFIXO_ALIAS_GRID1 as character
+
+    cQuery += " SELECT " + CRLF
+    cQuery += "     " + cPref1Grid + "_ITEMPV ITEM" + CRLF
+    cQuery += "     ," + cPref1Grid + "_PRODUT PRODUTO" + CRLF
+    cQuery += "     ," + cPref1Grid + "_VALOR VALOR" + CRLF
+    cQuery += " FROM " + CRLF
+    cQuery += "     " + RetSqlTab(cAlias1Grid) + CRLF
+    cQuery += " WHERE " + CRLF
+    cQuery += "     1 = 1 " + CRLF
+    cQuery += "     AND " + RetSqlFil(cAlias1Grid) + CRLF
+    If !Empty(cIDCash)
+        cQuery += "     AND " + cPref1Grid + "_IDCASH = " + ValToSql(cIDCash) + CRLF
+    EndIf
+    If !Empty(cFilPV)
+        cQuery += "     AND " + cPref1Grid + "_FILPED = " + ValToSql(cFilPV) + CRLF
+    EndIf
+    If !Empty(cNumPV)
+        cQuery += "     AND " + cPref1Grid + "_PV = " + ValToSql(cNumPV) + CRLF
+    EndIf
+    If !Empty(cTpMovimento)
+        cQuery += "     AND " + cPref1Grid + "_TPMOV = " + ValToSql(cTpMovimento) + CRLF
+    EndIf
+    cQuery += "     AND " + RetSqlDel(cAlias1Grid) + CRLF
+
+    cQuery := ChangeQuery(cQuery)
+
+Return cQuery
+
+/*/{Protheus.doc} searchCashbackVencido
+
+Rotina para buscar cashback vencido, e criar movimento de "Vencimento"
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+/*/
+User Function searchCashbackVencido(cIDCash, cCodCliente, cLojaCliente)
+    Local cQuery        := "" as character
+    Local cAlias        := "" as character
+
+    cQuery := getQryVencimento(cIDCash, cCodCliente, cLojaCliente)
+
+    TcQuery cQuery New Alias (cAlias:=GetNextAlias())
+
+    If (cAlias)->(!Eof())
+        While (cAlias)->(!Eof())
+            If faturamento.MonitorCashback.u_createMoviment(MOVIMENTO_VENCIMENTO, (cAlias)->IDCASH, (cAlias)->PRODUTO, (cAlias)->VALOR)
+                faturamento.MonitorCashback.u_recalculoCashback((cAlias)->IDCASH)
+            EndIf
+
+            (cAlias)->(DBSkip())
+        EndDo
+    EndIf
+
+    (cAlias)->(DBCloseArea())
+
+Return
+
+/*
+    Monta query de busca cashback vencido
+*/
+Static Function getQryVencimento(cIDCash, cCodCliente, cLojaCliente)
+    Local cQuery                := "" as character
+	Local cPref0Grid	        := PREFIXO_ALIAS_GRID0 as character
+	Local cPref1Grid	        := PREFIXO_ALIAS_GRID1 as character
+    Local cAlias0Grid	        := ALIAS_GRID0 as character
+    Local cAlias1Grid	        := ALIAS_GRID1 as character
+    Local nDiasVencimentoCash   := GetNewPar("ES_DVCCASH", 365)
+
+    cQuery += " SELECT " + CRLF
+    cQuery += " 	" + cPref1Grid + "_FILIAL FILIAL" + CRLF
+    cQuery += " 	," + cPref1Grid + "_IDCASH IDCASH" + CRLF
+    cQuery += " 	," + cPref1Grid + "_CLIENT CLIENTE" + CRLF
+    cQuery += " 	," + cPref1Grid + "_LOJA LOJA" + CRLF
+    cQuery += " 	," + cPref1Grid + "_PRODUT PRODUTO" + CRLF
+    cQuery += " 	," + cPref0Grid + "_VALOR VALOR" + CRLF
+    cQuery += " 	,Max(" + cPref1Grid + "_DATA + " + cPref1Grid + "_HORA) " + CRLF
+    cQuery += " FROM " + CRLF
+    cQuery += " 	" + RetSqlTab(cAlias1Grid) + CRLF
+    cQuery += " 	INNER JOIN " + RetSqlTab(cAlias0Grid) + " ON 1 = 1 " + CRLF
+    cQuery += " 		AND " + cAlias0Grid + "." + cPref0Grid + "_FILIAL = " + cAlias1Grid + "." + cPref1Grid + "_FILIAL " + CRLF
+    cQuery += " 		AND " + cAlias0Grid + "." + cPref0Grid + "_IDCASH = " + cAlias1Grid + "." + cPref1Grid + "_IDCASH " + CRLF
+    cQuery += " 		AND " + cAlias0Grid + "." + cPref0Grid + "_PRODUT = " + cAlias1Grid + "." + cPref1Grid + "_PRODUT " + CRLF
+    cQuery += " 		AND " + RetSqlDel(cAlias0Grid) + CRLF
+    cQuery += " WHERE " + CRLF
+    cQuery += " 	1 = 1 " + CRLF
+    cQuery += " 	AND " + cPref1Grid + "_TPMOV = " + ValToSql(MOVIMENTO_ENTRADA) + CRLF
+    cQuery += " 	AND DATEDIFF(DAY,CONVERT(date, " + cPref1Grid + "_DATA), GETDATE()) >= " + ValToSql(nDiasVencimentoCash) + CRLF
+    cQuery += " 	AND " + cPref0Grid + "_VALOR > 0 " + CRLF
+    If !Empty(cIDCash)
+        cQuery += "     AND " + cPref1Grid + "_IDCASH = " + ValToSql(cIDCash) + CRLF
+    EndIf
+    If !Empty(cCodCliente)
+        cQuery += "     AND " + cPref1Grid + "_CLIENT = " + ValToSql(cCodCliente) + CRLF
+    EndIf
+    If !Empty(cLojaCliente)
+        cQuery += "     AND " + cPref1Grid + "_LOJA = " + ValToSql(cLojaCliente) + CRLF
+    EndIf
+    cQuery += " 	AND " + RetSqlDel(cAlias1Grid) + CRLF
+    cQuery += " GROUP BY " + CRLF
+    cQuery += " 	" + cPref1Grid + "_FILIAL " + CRLF
+    cQuery += " 	," + cPref1Grid + "_IDCASH " + CRLF
+    cQuery += " 	," + cPref1Grid + "_CLIENT " + CRLF
+    cQuery += " 	," + cPref1Grid + "_LOJA " + CRLF
+    cQuery += " 	," + cPref1Grid + "_PRODUT " + CRLF
+    cQuery += " 	," + cPref0Grid + "_VALOR " + CRLF
+    cQuery += " 	," + cPref1Grid + "_DATA " + CRLF
+
+    cQuery := ChangeQuery(cQuery)
+
+Return cQuery
+
+/*/{Protheus.doc} validPorcentPV
+
+Rotina validar porcentagem do pedido atual em relação ao pedido anterior
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 10/06/2022
+
+/*/
+User Function validPorcentPV(cPedido, cCodCliente, cLojaCliente)
+    Local cQuery        := "" as character
+    Local cAlias        := "" as character
+    Local nPorcentPerm  := GetNewPar("ES_VPPVANT", 50) as numeric
+    Local lRet          := .F. as logical
+
+    cQuery := getQryProcentagem(cPedido, cCodCliente, cLojaCliente)
+
+    TcQuery cQuery New Alias (cAlias:=GetNextAlias())
+
+    If ( (cAlias)->(!Eof()) )
+        If ( (cAlias)->PORCENTAGEM >= nPorcentPerm )
+            lRet := .T.
+        EndIf       
+    EndIf
+
+    (cAlias)->(DBCloseArea())
+
+Return lRet
+
+/*
+    Monta query de validação da porcentagem dos pedidos de venda atual e anterior
+*/
+Static Function getQryProcentagem(cPedido, cCodCliente, cLojaCliente)
+    Local cQuery    := "" as character
+
+    cQuery += " WITH PVANTERIOR AS ( " + CRLF
+    cQuery += "     SELECT " + CRLF
+    cQuery += "         SUBSC5.FILIAL " + CRLF
+    cQuery += "         ,SUBSC5.PEDIDO " + CRLF
+    cQuery += "         ,COALESCE(SUM(C6_VALOR - C6_VALDESC), 0) TOTALPVANTERIOR " + CRLF
+    cQuery += "     FROM " + CRLF
+    cQuery += "         " + RetSqlTab("SC6") + CRLF
+    cQuery += "         INNER JOIN ( " + CRLF
+    cQuery += "             SELECT " + CRLF
+    cQuery += "                 SC5.C5_FILIAL FILIAL " + CRLF
+    cQuery += "                 ,MAX(SC5.C5_NUM) PEDIDO " + CRLF
+    cQuery += "             FROM " + CRLF
+    cQuery += "                 " + RetSqlTab("SC5") + CRLF
+    cQuery += "             WHERE " + CRLF
+    cQuery += "                 1 = 1 " + CRLF
+    cQuery += "                 AND" + RetSqlFil("SC5") + CRLF
+    cQuery += "                 AND SC5.C5_CLIENTE = " + ValToSql(cCodCliente) + CRLF
+    cQuery += "                 AND SC5.C5_LOJACLI = " + ValToSql(cLojaCliente) + CRLF
+    cQuery += "                 AND SC5.C5_NUM < " + ValToSql(cPedido) + CRLF
+    cQuery += "                 AND" + RetSqlDel("SC5") + CRLF
+    cQuery += "             GROUP BY " + CRLF
+    cQuery += "                 SC5.C5_FILIAL " + CRLF
+    cQuery += "             ) AS SUBSC5 ON 1 = 1 " + CRLF
+    cQuery += "                 AND SUBSC5.FILIAL = SC6.C6_FILIAL " + CRLF
+    cQuery += "                 AND SUBSC5.PEDIDO = SC6.C6_NUM " + CRLF
+    cQuery += "     WHERE " + CRLF
+    cQuery += "         1 = 1 " + CRLF
+    cQuery += "         AND" + RetSqlDel("SC6") + CRLF
+    cQuery += "     GROUP BY " + CRLF
+    cQuery += "         SUBSC5.FILIAL " + CRLF
+    cQuery += "         ,SUBSC5.PEDIDO " + CRLF
+    cQuery += " ), " + CRLF
+
+    cQuery += " PVATUAL AS ( " + CRLF
+    cQuery += "     SELECT " + CRLF
+    cQuery += "         SUBSC5.FILIAL " + CRLF
+    cQuery += "         ,SUBSC5.PEDIDO " + CRLF
+    cQuery += "         ,COALESCE(SUM(C6_VALOR - C6_VALDESC),0) TOTALPVATUAL " + CRLF
+    cQuery += "     FROM " + CRLF
+    cQuery += "         " + RetSqlTab("SC6") + CRLF
+    cQuery += "         INNER JOIN ( " + CRLF
+    cQuery += "             SELECT " + CRLF
+    cQuery += "                 SC5.C5_FILIAL FILIAL " + CRLF
+    cQuery += "                 ,MAX(SC5.C5_NUM) PEDIDO " + CRLF
+    cQuery += "             FROM " + CRLF
+    cQuery += "                 " + RetSqlTab("SC5") + CRLF
+    cQuery += "             WHERE " + CRLF
+    cQuery += "                 1 = 1 " + CRLF
+    cQuery += "                 AND" + RetSqlFil("SC5") + CRLF
+    cQuery += "                 AND SC5.C5_CLIENTE = " + ValToSql(cCodCliente) + CRLF
+    cQuery += "                 AND SC5.C5_LOJACLI = " + ValToSql(cLojaCliente) + CRLF
+    cQuery += "                 AND SC5.C5_NUM = " + ValToSql(cPedido) + CRLF
+    cQuery += "                 AND" + RetSqlDel("SC5") + CRLF
+    cQuery += "             GROUP BY " + CRLF
+    cQuery += "                 SC5.C5_FILIAL " + CRLF
+    cQuery += "             ) AS SUBSC5 ON 1 = 1 " + CRLF
+    cQuery += "                 AND SUBSC5.FILIAL = SC6.C6_FILIAL " + CRLF
+    cQuery += "                 AND SUBSC5.PEDIDO = SC6.C6_NUM " + CRLF
+    cQuery += "     WHERE " + CRLF
+    cQuery += "         1 = 1 " + CRLF
+    cQuery += "         AND" + RetSqlDel("SC6") + CRLF
+    cQuery += "     GROUP BY " + CRLF
+    cQuery += "         SUBSC5.FILIAL " + CRLF
+    cQuery += "         ,SUBSC5.PEDIDO " + CRLF
+    cQuery += " ) " + CRLF
+
+    cQuery += " SELECT " + CRLF
+    cQuery += "     TOTALPVATUAL " + CRLF
+    cQuery += "     ,TOTALPVANTERIOR " + CRLF
+    cQuery += "     ,(TOTALPVATUAL / TOTALPVANTERIOR) * 100 AS PORCENTAGEM " + CRLF
+    cQuery += " FROM	 " + CRLF
+    cQuery += "     PVATUAL " + CRLF
+    cQuery += "     ,PVANTERIOR " + CRLF
+
+Return cQuery

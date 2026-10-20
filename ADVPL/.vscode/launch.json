@@ -1,0 +1,200 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"type": "totvs_language_web_debug",
+			"request": "launch",
+			"name": "Web Debug - MultiThread",
+			"program": "${command:AskForProgramName}",
+			"isMultiSession": true,
+			"enableTableSync": true,
+			"enableMultiThread": true
+		},
+		{
+			"type": "totvs_language_web_debug",
+			"request": "launch",
+			"name": "Web Debug",
+			"program": "${command:AskForProgramName}",
+			"isMultiSession": true,
+			"enableTableSync": true,
+			"enableMultiThread": false,
+			"webNavigator": "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe"
+		},
+		{
+			"type": "totvs_language_web_debug",
+			"request": "launch",
+			"name": "Web Debug HLM 13999",
+			"program": "${command:AskForProgramName}",
+			"isMultiSession": true,
+			"enableTableSync": true,
+			"enableMultiThread": true,
+			"smartclientUrl": "http://192.168.90.244:13999/"
+		},
+		{
+			"type": "totvs_language_debug",
+			"request": "launch",
+			"name": "Solpack - TOTVS Language Debug",
+			"program": "${command:AskForProgramName}",
+			"cwb": "${workspaceFolder}",
+			"smartclientBin": "E:\\totvs\\protheus\\producao\\protheus12\\bin\\smartclient\\smartclient.exe",
+			"isMultiSession": true,
+			"enableTableSync": true,
+			"enableMultiThread": true
+		}
+	],
+	"lastPrograms": [
+		{
+			"args": [],
+			"label": "U_debug",
+			"description": ""
+		},
+		{
+			"args": [],
+			"label": "sigamdi",
+			"description": ""
+		},
+		{
+			"args": [],
+			"label": "u_tstRelFTEmbalagem",
+			"description": ""
+		},
+		{
+			"args": [],
+			"label": "u_tstMTGRDVW",
+			"description": ""
+		},
+		{
+			"label": "sigamdi",
+			"description": "<nil>"
+		},
+		{
+			"label": "apsdu",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_tstLibCredito",
+			"description": "<nil>"
+		},
+		{
+			"label": "U_DEBUG",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_tstMTGRDVW",
+			"description": "<nil>"
+		},
+		{
+			"label": "U",
+			"description": "<nil>"
+		},
+		{
+			"label": "sigam",
+			"description": "<nil>"
+		},
+		{
+			"label": "sigacfg",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_tstTela",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_fsenvmail",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_EACTBA020",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_expordic",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_UPDAPARA",
+			"description": "<nil>"
+		},
+		{
+			"label": "sigamdiu",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_tstImpPV",
+			"description": "<nil>"
+		},
+		{
+			"label": "sigamdui",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_UPDEXP",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_UPDBA",
+			"description": "<nil>"
+		},
+		{
+			"label": "u_tstGridFWMsPrinter"
+		},
+		{
+			"label": "sigafat"
+		},
+		{
+			"label": "u_solfat01"
+		},
+		{
+			"label": "u_testeSEQLIB"
+		},
+		{
+			"label": "U_SOLFAT03"
+		},
+		{
+			"label": "SIGACRM"
+		},
+		{
+			"label": "u_solfat02"
+		},
+		{
+			"label": "sigapcp"
+		},
+		{
+			"label": "u_testetrans"
+		},
+		{
+			"label": "U_COND4OP"
+		},
+		{
+			"label": "XXX"
+		},
+		{
+			"label": "u_SOLFRAC1"
+		},
+		{
+			"label": "u_SOLPO"
+		},
+		{
+			"label": "u_tstImpAPIFicha"
+		},
+		{
+			"label": "u_ExecUpdCpoOP1"
+		},
+		{
+			"label": "U_UpdSG2Armazenar"
+		},
+		{
+			"label": "u_TSTAcompProd"
+		},
+		{
+			"args": [],
+			"label": "u_CadZZ9"
+		},
+		{
+			"label": "u_zNovSenha"
+		}
+	],
+	"lastProgramExecuted": "sigamdi",
+	"lastProgramArgumens": [],
+	"lastProgramArguments": []
+}

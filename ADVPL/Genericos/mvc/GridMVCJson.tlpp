@@ -1,0 +1,184 @@
+#include 'totvs.ch'
+#include 'TopConn.ch'
+#include "fwmvcdef.ch"
+
+/*/{Protheus.doc} GridMVCJson
+Classe responsável por abrir um MVC só com grid através de um JSON
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+/*/
+class GridMVCJson from GridMVCDef
+	data oJson 	 	  as json
+	data aLines		  as array
+
+	public method new() constructor
+	public method getJson()
+	public method setJson()
+	public method loadGrid()
+	private method jsonStruct()
+endclass
+/*/{Protheus.doc} GridMVCJson::new
+Método construtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+/*/
+method new(cID) class GridMVCJson
+	_Super:new(cID,"GRIDMVC","MODEL_GRID","VIEW_GRID",{|oModel|::loadGrid(oModel)})
+	::aLines	   := {}
+return
+/*/{Protheus.doc} GridMVCJson::getJson
+Retorna o Json da Json que será utilizado para montar o grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return character, Retorna o Json da Json
+/*/
+method getJson() class GridMVCJson
+return ::oJson
+/*/{Protheus.doc} GridMVCJson::setJson
+Seta a Json da Json que deverá ser utilizado para montar o grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param oJson, character, Json da Json que será utilizado para montar o grid
+/*/
+method setJson(oJson) class GridMVCJson
+	default oJson := JsonObject():new()
+
+	::oJson       := oJson
+
+	::jsonStruct(oJson)
+return
+/*/{Protheus.doc} GridMVCJson::loadGrid
+Carrega o array com os dados do grid para o MVC
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param oModel, object, Model com a definição do grid
+@return array, Array com os dados do grid
+/*/
+method loadGrid(oModel) class GridMVCJson
+return ::aLines
+/*/{Protheus.doc} GridMVCJson::jsonStruct
+Monta a estrutura de campos do json enviado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+@param oJson, object, Array com as linhas que serão apresentadas no grid
+/*/
+method jsonStruct(oJson) class GridMVCJson
+	local aLines     := oJson
+	local nLine      := 0
+	local aColumns   := {}
+	local nColumn    := 0
+	local cColumn    := ""
+	local cType      := ""
+	local nSize      := 0
+	local nDecimal   := 0
+	local nColumnTab := 0
+	local aLine      := {}
+	local nRecno     := 0
+	local aFieldsTable := {}
+	for nLine := 1 to len(aLines)
+		oJsonLine := aLines[nLine]
+		aColumns  := oJsonLine:getNames()
+		
+		for nColumn := 1 to len(aColumns)
+			cColumn  := aColumns[nColumn]
+			xContent := oJsonLine[cColumn]
+			nSize    := 0
+			nDecimal := 0
+
+			if subStr(cColumn,1,1) <> '_'
+				if upper(cColumn) == "RECNO"
+					nRecno := xContent
+				endif
+				cType := valType(xContent)
+
+				if !(cType $ "L/C/D/N/M/")
+					loop
+				endif
+
+				if nLine == 1
+					aAdd(aFieldsTable,array(4))
+				endif
+
+				nColumnTab := len(aFieldsTable)
+				nSize      := aFieldsTable[nColumnTab,3]
+				nDecimal   := aFieldsTable[nColumnTab,4]
+
+				calcSizeDecimal(xContent,cType,@nSize,@nDecimal)
+
+				aFieldsTable[nColumnTab,1] := cColumn
+				aFieldsTable[nColumnTab,2] := cType
+				aFieldsTable[nColumnTab,3] := nSize
+				aFieldsTable[nColumnTab,4] := nDecimal
+
+				aAdd(aLine,xContent)
+			endif
+
+		next nColumn
+
+		aAdd(::aLines,{nRecno,aClone(aLine)})
+		aLine := {}
+		nRecno:= 0
+
+	next nLine
+
+	::setFieldsTable(aFieldsTable)
+return
+/*
+Calcula o tamanho do campo de acordo com o tipo e o conteudo passado por parametro
+Autor: Tiago Faria
+Data: 29/07/2021
+*/
+static function calcSizeDecimal(xContent,cType,nSize,nDecimal)
+	local cDecimal    := ""
+	local nNewDecimal := 0
+	local nNewSize    := 0
+	local nNoRound    := 0
+	default nDecimal  := 0
+	default nSize     := 0
+
+	if cType == "L"
+		nNewSize 	:= 1
+		nNewDecimal := 0
+	elseif cType == "C"
+		nNewSize    := len(xContent)
+		nNewDecimal := 0
+	elseif cType == "D"
+		nNewSize 	:= 8
+		nNewDecimal := 0
+	elseif cType == "M"
+		nNewSize 	:= 10
+		nNewDecimal := 0
+	elseif cType == "N"
+		nNoRound    := noRound(xContent,0)
+		nNewSize    := len(cValToChar(nNoRound))
+		
+		nDecimal    := xContent - nNoRound
+		if nDecimal > 0
+			cDecimal    := cValToChar(nDecimal)
+			cDecimal    := strTran(cDecimal,"0.","")
+			nNewDecimal := len(cDecimal)
+		else
+			nNewDecimal := 0
+		endif
+	endif
+
+	if nNewSize > nSize
+		nSize := nNewSize
+	endif
+
+	if nNewDecimal > nDecimal
+		nDecimal := nNewDecimal
+	endif
+return

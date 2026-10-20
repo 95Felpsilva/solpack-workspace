@@ -1,0 +1,74 @@
+#include 'tlpp-core.th'
+
+static oCellHorAlign := FwXlsxCellAlignment():Horizontal()
+static oCellVertAlign := FwXlsxCellAlignment():Vertical()
+
+Interface IXlsFormat
+	method cellDate()
+	method cellRed()
+	method cellNumberMilhar()
+	method cellText()
+endInterface
+
+class IPXlsxFormat implements IXlsFormat
+
+	public method new()
+	public method CellNumberMilhar()
+	public method cellDate()
+	public method cellRed()
+	public method cellText()
+	static method Default()
+endclass
+
+method new() class IPXlsxFormat
+return self
+
+method Default() class IPXlsxFormat
+	local oConvert := IPXlsxFormat():new()
+return oConvert
+
+
+method cellDate() class IPXlsxFormat
+	local jFormat := JsonObject():new()
+
+	jFormat["horAlignment"]  := oCellHorAlign:Default()
+	jFormat["vertAlignment"] := oCellVertAlign:Default()
+	jFormat["wrapText"]      := .f.
+	jFormat["rotation"]      := 0
+	jFormat["textColor"]     := "000000"
+	jFormat["bgColor"]       := "FFFFFF"
+	jFormat["customFormat"]  := "dd/mm/yyyy"
+return jFormat
+
+method cellRed(cCorFonte,cCorFundo,cField,nValue) class IPXlsxFormat
+	local jFormat := ::cellNumberMilhar(cCorFonte,cCorFundo,cField,nValue)
+	local cRed := "FF0000"
+	
+	jFormat["textColor"]     := cRED
+return jFormat
+
+method cellNumberMilhar(cCorFonte,cCorFundo,cField,nValue) class IPXlsxFormat
+	local jFormat := JsonObject():new()
+
+	jFormat["horAlignment"]  := oCellHorAlign:Default()
+	jFormat["vertAlignment"] := oCellVertAlign:Default()
+	jFormat["wrapText"]      := .f.
+	jFormat["rotation"]      := 0
+	jFormat["textColor"]     := "000000"
+	jFormat["bgColor"]       := "FFFFFF"
+	jFormat["customFormat"]  := "#,##0.00;[Red]- #,##0.00"
+return jFormat
+
+method cellText(cField,nValue) class IPXlsxFormat
+	local jFormat := JsonObject():new()
+
+	jFormat["horAlignment"]  := oCellHorAlign:Default()
+	jFormat["vertAlignment"] := oCellVertAlign:Default()
+	jFormat["wrapText"]      := .f.
+	jFormat["rotation"]      := 0
+	jFormat["textColor"]     := "000000"
+	jFormat["bgColor"]       := "FFFFFF"
+	jFormat["customFormat"]  := nil
+return jFormat
+
+

@@ -1,0 +1,153 @@
+#include 'totvs.ch'
+#include 'topconn.ch'
+
+/*/{Protheus.doc} ExecUpdCpoOP1
+Função responsável por carga inicial no campo C2_ZZQTOP1, que grava a quantidade produzida pela operação 01.
+@type class
+@version 12.1.2410
+@author Felipe Silva
+@since 17/09/2025
+/*/
+user function ExecUpdCpoOP1()
+    local cCodEmp   := "01"
+
+    OpenSm0(, .t.)
+    RpcClearEnv()
+    RpcSetEnv(cCodEmp, "0101")
+
+    u_UpdCpoOP1()
+return
+
+user function UpdCpoOP1()
+    local cAlias    := GetSC2()
+    local nRecSC2   := 0
+    local nQtdProd  := 0
+    local nQtdReg   := 0
+    local nAux      := 0
+
+    (cAlias)->(DbGoTop())
+
+    Count To nQtdReg
+
+    (cAlias)->(DbGoTop())
+
+    Conout("Quantidade de registros a serem processados: " + cValToChar(nQtdReg))
+
+    while (cAlias)->(!Eof())
+        nAux++
+        nRecSC2 := (cAlias)->RECSC2
+        SC2->(DbGoTo(nRecSC2))
+
+        nQtdProd := u_GetSH6()
+
+        RecLock("SC2", .f.)
+            SC2->C2_ZZQTOP1 := nQtdProd
+        SC2->(MsUnlock())
+
+        Conout("Registro atual: " + cValToChar(nAux))
+
+        (cAlias)->(DbSkip())
+    enddo
+
+    (cAlias)->(DbCloseArea())
+return
+
+user function GrvCpoOP1(cOP, nQtdSH6Prod, lEstorno, cOperac)
+    local cAlias        := GetSC2(cOP)
+    local nRecSC2       := 0
+    local nQtdProd      := 0
+
+    default lEstorno    := .f.
+    default cOperac     := "01"
+
+    while (cAlias)->(!Eof())
+        nRecSC2 := (cAlias)->RECSC2
+        SC2->(DbGoTo(nRecSC2))
+
+        nQtdProd := u_GetSH6()
+
+        RecLock("SC2", .f.)
+            if lEstorno .or. cOperac == '02'
+                SC2->C2_ZZQTOP1 := nQtdProd
+            else
+                SC2->C2_ZZQTOP1 := (nQtdProd + nQtdSH6Prod)
+            endif
+        SC2->(MsUnlock())
+
+        (cAlias)->(DbSkip())
+    enddo
+
+    (cAlias)->(DbSkip())
+return
+
+static function GetSC2(cOP)
+    local cAlias    := ""
+    local cQuery    := ""
+
+    default cOP     := ""
+
+    cQuery += "SELECT" + CRLF
+    cQuery += "    SC2.R_E_C_N_O_ AS RECSC2" + CRLF
+
+    cQuery += "FROM " + RetSqlTab("SC2") + "" + CRLF
+
+    cQuery += "WHERE" + CRLF
+    cQuery += "    1 = 1" + CRLF
+    cQuery += "    AND SC2.C2_FILIAL = '" + FWxFilial("SC2") + "'" + CRLF
+    if !Empty(cOP)
+        cQuery += "     AND SC2.C2_NUM + SC2.C2_ITEM + SC2.C2_SEQUEN = '" + cOP + "'" + CRLF
+    endif
+    cQuery += "    AND SC2.D_E_L_E_T_ = ' '" + CRLF
+
+    TcQuery cQuery new alias (cAlias := GetNextAlias())
+return cAlias
+
+user function GetSH6(cNum, cItem, cSequen)
+    local cAlias    := ""
+    local cQuery    := ""
+    local nRet      := 0
+
+    default cNum    := SC2->C2_NUM
+    default cItem   := SC2->C2_ITEM
+    default cSequen := SC2->C2_SEQUEN
+
+    cQuery += "SELECT" + CRLF
+    cQuery += "    SH6QTD.QTD_APONT" + CRLF
+
+    cQuery += "FROM " + RetSqlTab("SG2") + "" + CRLF
+
+    cQuery += "INNER JOIN " + RetSqlTab("SC2") + "" + CRLF
+    cQuery += "    ON 1 = 1" + CRLF
+    cQuery += "    AND SC2.C2_FILIAL = '" + FWxFilial("SC2") + "'" + CRLF
+    cQuery += "    AND SC2.C2_PRODUTO = SG2.G2_PRODUTO" + CRLF
+    cQuery += "    AND SC2.C2_ROTEIRO = SG2.G2_CODIGO" + CRLF
+    cQuery += "    AND SC2.D_E_L_E_T_ = ' '" + CRLF
+
+    cQuery += "OUTER APPLY (" + CRLF
+    cQuery += "    SELECT" + CRLF
+    cQuery += "        SUM(H6_QTDPROD) AS 'QTD_APONT'" + CRLF
+    cQuery += "    FROM " + RetSqlTab("SH6") + "" + CRLF
+    cQuery += "    WHERE" + CRLF
+    cQuery += "        1 = 1" + CRLF
+    cQuery += "        AND H6_FILIAL = '" + FWxFilial("SH6") + "'" + CRLF
+    cQuery += "        AND H6_OP = C2_NUM + C2_ITEM + C2_SEQUEN + C2_ITEMGRD" + CRLF
+    cQuery += "        AND H6_OPERAC = '01'" + CRLF
+    cQuery += "        AND SH6.D_E_L_E_T_ = ' '" + CRLF
+    cQuery += ") SH6QTD" + CRLF
+
+    cQuery += "WHERE" + CRLF
+    cQuery += "    1 = 1" + CRLF
+    cQuery += "    AND SG2.G2_FILIAL = '" + FWxFilial("SG2") + "'" + CRLF
+    cQuery += "    AND (SG2.G2_DTINI = ' ' OR SG2.G2_DTINI <= SC2.C2_DATPRF)" + CRLF
+    cQuery += "    AND (SG2.G2_DTFIM = ' ' OR SG2.G2_DTFIM >= SC2.C2_DATPRF)" + CRLF
+    cQuery += "    AND SC2.C2_NUM + SC2.C2_ITEM + SC2.C2_SEQUEN = '" + cNum + cItem + cSequen + "'" + CRLF
+    cQuery += "    AND SG2.D_E_L_E_T_ = ' '
+
+    TcQuery cQuery new alias (cAlias := GetNextAlias())
+
+    if (cAlias)->(!Eof())
+        nRet := (cAlias)->QTD_APONT
+    endif
+
+    (cAlias)->(DbCloseArea())
+return nRet

@@ -1,0 +1,101 @@
+#include 'totvs.ch'
+/*/{Protheus.doc} sendMail
+Envio de e-mail através das classes TMailManager e TMailMessage
+@type function
+@version 12.1.33
+@author Tiago Faria
+@since 04/11/2021
+@param cSubject, character, Assunto do e-mail
+@param cBody, character, Corpo do e-mail
+@param cTo, character, E-mail que deverá ser enviado
+@param aFiles, array, Arquivos que deverão ser enviado em anexo
+@return logical, Se true e-mail enviado com sucesso se false houve erro na hora de enviar o e-mail
+/*/
+user function sendMail(cSubject,cBody,cTo,xFiles)
+	local oMailManager 	:= TMailManager():new()
+	local oMailMessage	:= TMailMessage():new()
+	local lISS			:= GetMV("MV_RELSSL")
+	local cServer 		:= GetMV("MV_RELSERV")
+	local cAccount    	:= GetMV("MV_RELACNT")
+	local cPassword		:= alltrim(GetMV("MV_RELPSW"))
+	local cFrom			:= GetMV("MV_RELFROM")
+	local lAuthenticate := GetMV("MV_RELAUTH")
+	//local lSSL			:= GetMV("MV_RELSSL")
+	local lTLS			:= GetMV("MV_RELTLS")
+	local nTimeOut		:= GetMV("MV_RELTIME")
+	local nLastError	:= 0
+	local lSendOk		:= .F.
+	local lAttachOK     := .t.
+	local nPort			:= 0
+	local lAuthOK		:= .F.
+	local nFile         := 0
+	default cTo 		:= getNewPar("ZZ_MAILPIN","tiago.fsantos@totvs.com.br;suframa@solpack.com.br")
+	default cBody		:= ""
+	default xFiles      := {}
+
+    if valType(xFiles)== "C"
+        xFiles := {xFiles}
+    endif
+
+	if (":" $ cServer)
+		cStrPort:= SubStr(cServer, At(":", cServer))
+		cServer := StrTran(cServer, cStrPort, "")
+		nPort 	:= Val(StrTran(cStrPort, ":", ""))
+	endIf
+
+	oMailManager:setUseSSL(lISS)
+	oMailManager:setUseTLS(lTLS)
+	oMailManager:setSmtpTimeOut(nTimeOut)
+	oMailManager:init("", cServer, cAccount, cPassword, 0, nPort)
+
+	oMailMessage:clear()
+
+	if connect(@oMailManager)
+		if lAuthenticate
+			lAuthOk  := oMailManager:smtpAuth(cAccount, cPassword) == 0
+		else
+			lAuthOk := .t.
+		endIf
+		if lAuthOk
+			oMailMessage:cFrom 		:= cFrom
+			oMailMessage:cTo 		:= cTo
+			oMailMessage:cSubject 	:= cSubject
+			oMailMessage:cBody 		:= cBody
+
+			for nFile := 1 to len(xFiles)
+				if oMailMessage:AttachFile(xFiles[nFile]) < 0
+					lAttachOK := .f.
+					conout( "[SENDMAIL] Erro ao anexar arquivo")
+				endif
+			next nFile
+
+			if lAttachOK
+				nLastError := oMailMessage:send(oMailManager)
+				lSendOk := (nLastError == 0)
+				if !lSendOk
+					conout( "[SENDMAIL] Erro ao enviar e-mail para o usuário")
+				endif
+			endif
+		endif
+		myDisconnect(@oMailManager)
+	endif
+return lSendOk .and. lAuthOk
+
+static function connect(oMailManager)
+	local nLastError := oMailManager:smtpConnect()
+	local lRet		 := .t.
+
+	if (nLastError <> 0)
+		conout( "[SENDMAIL] Falha ao conectar ao Servidor de Email")
+		lRet := .f.
+	endIf
+return lRet
+
+static function myDisconnect(oMailManager)
+	local lRet			:= .t.
+
+	if oMailManager:smtpDisconnect() <> 0
+		conout( "[SENDMAIL] Falha ao desconectar do Servidor de Email")
+		lRet := .f.
+	endIf
+return lRet

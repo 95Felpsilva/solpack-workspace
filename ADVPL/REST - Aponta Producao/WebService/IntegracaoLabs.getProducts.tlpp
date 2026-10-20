@@ -1,0 +1,134 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+
+namespace IntegracaoLabs
+
+/*/{Protheus.doc} getProducts
+
+Retorna lista de cadastro de produtos
+
+@type function
+@author Gabriel Pereira - CRM Services
+@since 12/12/2022
+@version P12
+@database ORACLE
+
+@param [oClassRestFul], object, Objeto da Classe RESTFUL recebido do fonte com a definição das API's
+@param [oRest], object, Objeto da Classe Rest do TLPP recebido do fonte com a definição das API's
+
+@return logical, lRet - Indica se foi processado com sucesso
+/*/ 
+User Function getProducts(oClassRestFul as object, oRest as object) as character	
+	Local cJsonResponse			:= "" as character
+	Local cQueryHeader			:= "" as character
+	Local nStatusCode			:= 0 as numeric
+    Local lUseTmpTable			:= .F. as logical
+    Local lRetExecuteAPIREST	:= .T. as logical
+
+	Private oFwAdapterBaseV2	:= NIL as object
+	Private cWhere		 		:= "" as character 
+	Private cFilter		 		:= "" as character 
+	Private nPage				:= 1 as numeric 
+	Private nPageSize		 	:= 1 as numeric 
+	Private aQueryString 	 	:= {} as array 
+
+	oFwAdapterBaseV2 	:= FwAdapterBaseV2():New("GET")
+
+	getParamResquest()
+    oFwAdapterBaseV2:setPage(nPage)
+    oFwAdapterBaseV2:setPageSize(nPageSize)
+
+	createMapaCampos()
+	cQueryHeader := getQryProducts()
+
+	oFwAdapterBaseV2:SetQuery(cQueryHeader)
+	oFwAdapterBaseV2:SetWhere(cWhere)
+	oFwAdapterBaseV2:SetOrder("B1_COD")
+	If ( Len(aQueryString) > 0 )
+		oFwAdapterBaseV2:SetUrlFilter(aQueryString)
+	EndIf
+
+	lRetExecuteAPIREST := oFwAdapterBaseV2:Execute(lUseTmpTable)
+
+	If ( lRetExecuteAPIREST )
+		oFwAdapterBaseV2:FillGetResponse()
+		cJsonResponse 		:= oFwAdapterBaseV2:GetJSONResponse()
+		nStatusCode 		:= oFwAdapterBaseV2:GetCode()
+	Else
+		cJsonResponse 		:= AllTrim(oFwAdapterBaseV2:cMessage)
+		nStatusCode 		:= oFwAdapterBaseV2:GetCode()
+	EndIf
+
+	freeObj(oFwAdapterBaseV2)
+
+	oRest:setKeyHeaderResponse("Content-Type", "Application/Json;charset=utf-8")
+	oRest:setResponse(cJsonResponse)					
+	oRest:setStatusCode(nStatusCode)
+
+Return cJsonResponse
+
+/*
+	Cria mapa de campos a ser retornado na API
+*/
+Static Function createMapaCampos() as variant
+	oFwAdapterBaseV2:AddMapFields("code"		, "B1_COD"  , .T., .T., { "B1_COD", "C", tgv.util.GetFieldLength("B1_COD"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("descption"	, "B1_DESC" , .T., .F., { "B1_DESC", "C", tgv.util.GetFieldLength("B1_DESC"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("group"		, "B1_GRUPO", .T., .F., { "B1_GRUPO", "C", tgv.util.GetFieldLength("B1_GRUPO"), 0 } )
+Return
+
+/*
+	Cria query de executação da API
+*/
+Static Function getQryProducts() as character
+	Local cQuery	:= "" as character
+
+	cQuery := "SELECT #QueryFields# FROM " + RetSqlTab("SB1") + " WHERE 1 = 1"
+	cQuery := "SELECT #QueryFields# FROM (" + cQuery + ") SUBQRYREST WHERE 1 = 1 AND #QueryWhere#"
+Return cQuery
+
+/*
+	Rotina para recuperar parâmetros enviados
+*/
+Static Function getParamResquest()
+	Local aParams	:= {} as array
+	Local cParam	:= "" as character
+	Local cContent	:= "" as character
+	Local nParam	:= 1 as numeric
+
+	nPage := oRest:getQueryRequest()["Page"]
+
+	If ( Empty(nPage) )
+		nPage := 1
+	Endif
+	If ( ValType(nPage) == "C" )
+		nPage := Val(nPage)
+	Endif
+
+	nPageSize := oRest:getQueryRequest()["PageSize"]
+	
+	If ( Empty(nPageSize) )
+		nPageSize := 1
+	Endif
+	If ( ValType(nPageSize) == "C" )
+		nPageSize := Val(nPageSize)
+	Endif
+	
+	cWhere := oRest:getQueryRequest()["Where"]
+	If ( Empty(cWhere) )
+		cWhere := "1 = 1"
+	Endif
+	
+	aParams := oRest:getQueryRequest():GetNames()
+
+	If ( Len(aParams) > 0 )
+		For nParam:=1 To Len(aParams)
+			cParam 	:= aParams[nParam]
+			cContent:= oRest:getQueryRequest()[cParam]
+
+			If ( !Empty(cParam) .And. !( Upper(AllTrim(cParam)) $ "PAGESIZE,PAGE,WHERE" ) )
+				aAdd(aQueryString, {cParam, cContent})
+			EndIf
+		Next nParam
+	EndIf 
+Return

@@ -1,0 +1,34 @@
+#include 'totvs.ch'
+/*/{Protheus.doc} RecalcSaldoAtual
+Calcula o saldo atual para os casos em que é alterado a quantidade ja liberada por estoque.
+@type function
+@version  12.1.27
+@author Tiago Faria
+@since 25/08/2021
+@param oGrid, object, FwFormGrid
+@return numeric, retorna o saldo atual do produto
+/*/
+user function RecalcSaldoAtual(oGrid, cCampo)
+	local aRows    := FwSaveRows()
+	local nSaldo   := FwFldGet("B2_QATU")
+	local cProduto := oGrid:getValue("DESC_PRODUTO")
+	local nLine    := 0
+    local nLinAtu  := oGrid:GetLine()
+
+	default cCampo := "C9_QTDLIB"
+
+	for nLine := 1 to oGrid:length()
+		oGrid:goLine(nLine)
+
+		if oGrid:isDeleted()
+			loop
+		endif
+		if cProduto == FwFldGet("DESC_PRODUTO") .and. isLibCredEstoque()
+			nSaldo += FwFldGet("QTD_LIB_ORIGINAL") - if(nLinAtu == nLine,FwFldGet(cCampo),oGrid:getValue(cCampo))
+		endif
+	next nLine
+	FwRestRows(aRows)
+return nSaldo
+
+static function isLibCredEstoque()
+return alltrim(FwFldGet("LEG")) == "BR_VERDE"

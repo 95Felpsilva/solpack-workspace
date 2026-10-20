@@ -1,0 +1,13 @@
+{
+    "totvsLanguageServer.welcomePage": false,
+    "totvsLanguageServer.askCompileResult": true,
+    "[advpl]": {
+        "files.encoding": "windows1252"
+    },
+    "totvsLanguageServer.askEncodingChange": false,
+    "totvsLanguageServer.workspaceServerConfig": true,
+	"totvsLanguageServer.launch.args": [
+],
+"totvsLanguageServer.editor.linter.includes": "E:\\totvs\\protheus\\producao\\protheus12\\include",
+"totvsLanguageServer.web.navigator.open.external": true
+}

@@ -1,0 +1,106 @@
+#include 'totvs.ch'
+#include 'TopConn.ch'
+#include "fwmvcdef.ch"
+
+/*/{Protheus.doc} GridMVCSQL
+Classe responsável por abrir um MVC só com grid através de uma query
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+/*/
+class GridMVCSQL from GridMVCDef
+	data cAlias 	  as character
+	data cQuery		  as character
+
+	public method new() constructor
+	public method setQuery()
+	public method getAlias()
+	public method setAlias()
+	public method loadGrid()
+endclass
+/*/{Protheus.doc} GridMVCSQL::new
+Método construtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+/*/
+method new(cID,cIDProgram,cIdModel,cIDView) class GridMVCSQL
+	default cIDProgram := "GRIDMVC"
+	default cIdModel   := "MODEL_GRID"
+	default cIDView    := "VIEW_GRID"
+	
+	_Super:new(cID,cIDProgram,cIdModel,cIDView,{|oModel|::loadGrid(oModel)})
+
+	::cQuery := ""
+	::cAlias := ""
+return
+/*/{Protheus.doc} GridMVCSQL::setQuery
+Exibir tela MVC só com 1 grid através de uma query
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/06/2021
+@param cQuery, character, Query a ser exibida no grid
+/*/
+method setQuery(cQuery) class GridMVCSQL
+	local cAlias 	:= ""
+	default cQuery  := ""
+	
+	::cQuery := cQuery
+
+	TcQuery cQuery new Alias (cAlias := getNextAlias())
+	::setAlias(cAlias)
+return
+/*/{Protheus.doc} GridMVCSQL::getAlias
+Retorna o alias da query que será utilizado para montar o grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return character, Retorna o alias da query
+/*/
+method getAlias() class GridMVCSQL
+return ::cAlias
+/*/{Protheus.doc} GridMVCSQL::setAlias
+Seta a alias da query que deverá ser utilizado para montar o grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param cAlias, character, Alias da query que será utilizado para montar o grid
+/*/
+method setAlias(cAlias) class GridMVCSQL
+	local nField   := 0
+	local aTypeField := ::getTypeField()
+	default cAlias := ""
+
+	::cAlias       := cAlias
+
+	if !empty(::getMarkField())
+		TcSetField(::cAlias,::getMarkField(),"L",1,0)
+	endif
+
+	for nField := 1 to len(aTypeField)
+		TcSetField(::cAlias,aTypeField[nField,1],aTypeField[nField,2],aTypeField[nField,3],aTypeField[nField,4])
+	next nField
+	
+	::setFieldsTable((::cAlias)->(dbStruct()))
+return
+/*/{Protheus.doc} GridMVCSQL::loadGrid
+Carrega o array com os dados do grid para o MVC
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param oModel, object, Model com a definição do grid
+@return array, Array com os dados do grid
+/*/
+method loadGrid(oModel) class GridMVCSQL
+	local oIpUtilMVC := IpUtilMVC():new()
+
+	if select(::cAlias) == 0 .and. !empty(::cQuery)
+		::setQuery(::cQuery)
+	endif
+return oIpUtilMVC:loadGrid(/*cQuery*/,oModel,::cAlias)

@@ -1,0 +1,386 @@
+#include 'totvs.ch'
+#include 'FwMVCDef.ch'
+
+static lUltMark := .f.
+/*/{Protheus.doc} GridDefView
+Classe com as definições da view para o GRID
+@type class
+@version 12.1.27 
+@author Tiago Faria
+@since 29/07/2021
+/*/
+class GridDefView from GridDefCommon
+    private data cProgram
+	private data cIDGridView  as character
+	private data lOnlyView    as logical
+	private data bViewDef as codeblock
+    private data bBeforeMark as codeblock
+    private data aTitleField as array
+    private data cMarkField	  as character
+    private data cIDGridModel as character
+	private data aStruct	  as array
+	private data nPercentGrid as numeric
+	private data nPercentForm as numeric 
+	private data lShowMarkALl as logical
+	
+	public method new() CONSTRUCTOR
+	public method getIDGridView()
+	public method setViewDef()
+	public method getViewDef()
+	public method viewDef()
+	public method setOnlyView()
+	public method markAll()
+	public method getBeforeMark()
+	public method setBeforeMark()
+    public method getTitleField()
+    public method setTitleField()
+	public method setFieldStruct()
+	public method addFieldStruct()
+	public method setPercentGrid()
+	public method getPercentGrid()
+	public method setPercentForm()
+	public method getPercentForm()
+	public method setShowMarkAll()
+	private method getStructGridView()
+    private method isLoadField()
+endclass
+/*/{Protheus.doc} GridDefView::new
+Método construtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cIDGridView, character, ID do grid que será utilizado na VIEW
+@param cProgram, character, ID do programa
+@param cIDGridModel, character, ID do grid que será utilziado no MODEL
+/*/
+method new(cIDGridView,cProgram, cIDGridModel) class GridDefView
+    _Super:new()
+	::cIDGridView  := cIDGridView
+	::bViewDef	   := {|oView| oView}
+    ::cProgram     := cProgram
+    ::aTitleField  := {}
+    ::cMarkField   := ""
+    ::cIDGridModel := cIDGridModel
+	::setBeforeMark()
+	::setFieldStruct()
+	::setPercentGrid()
+	::setPercentForm()
+	::setShowMarkAll()
+return
+/*/{Protheus.doc} GridDefView::viewDef
+Retorna as definições da view
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return object, Retorna objeto com as definições da view
+/*/
+method viewDef() class GridDefView
+	local oView 	:= nil
+	local oModel 	:= nil
+	local oStrCab 	:= nil
+	local oStrGrid 	:= nil
+
+	// Estrutura Fake de Field
+	oStrCab := getTableFakeView()
+
+	//Estrutura de Grid
+	oStrGrid := ::getStructGridView()
+
+	oModel := FWLoadModel(::cProgram)
+
+	oView := FwFormView():New()
+
+	oView:setModel(oModel)
+	oView:addField("CABEC_FAKE_VIEW", oStrCab, "CABEC_FAKE_MODEL")
+	oView:addGrid(::getIdGridView(), oStrGrid, ::cIDGridModel)
+	if ::lOnlyView
+		oVIew:SetOnlyView(::getIdGridView())
+	endif
+	oView:createHorizontalBox("TOHIDE", 0 )
+	oView:createHorizontalBox("TOSHOW", ::getPercentGrid())
+	oView:setOwnerView("CABEC_FAKE_VIEW", "TOHIDE" )
+	oView:setOwnerView(::getIdGridView(), "TOSHOW")
+	oView := eval(::getViewDef(),oView)
+	if !empty(::getMarkField())
+		oView:GetViewStruct(::getIdGridView()):setProperty(::getMarkField(),MVC_VIEW_CANCHANGE,.t.)
+		oView:GetViewStruct(::getIdGridView()):setProperty(::getMarkField(),MVC_VIEW_ORDEM,"00")
+		if ::lShowMarkALl
+			oView:addUserButton("Marca/Desmarca Todos", "MAGIC_BMP"/*<cResource >*/, {|oView| fwMsgRun(, {|| ::markAll(oView)}, "MARCA TODOS","Aguarde " + if(!lUltMark," selecionando"," desmarcando") + " registros...")}/*<bBloco >*/, "Marca todos os registros"/*[ cToolTip ]*/, VK_F5/*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+			oView:addUserButton("Inverte Marca", "MAGIC_BMP"/*<cResource >*/, {|oView| fwMsgRun(, {|| ::markAll(oView,.t.)}, "MARCA TODOS","Aguarde invertendo a marca dos registros...")}/*<bBloco >*/, "Marca todos os registros"/*[ cToolTip ]*/, VK_F5/*nShortCut*/, /*[ aOptions ]*/, .t./*[lShowBar]*/)
+		endif
+	endif
+return oView
+/*/{Protheus.doc} GridDefView::setViewDef
+Seta bloco de código responável por receber o objeto da View, realizar manipulações e devolver o objeto modificado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param bViewDef, codeblock, bloco de código responável por receber o objeto da View, realizar manipulações e devolver o objeto modificado
+/*/
+method setViewDef(bViewDef) class GridDefView
+	::bViewDef := bViewDef
+return
+/*/{Protheus.doc} GridDefView::getViewDef
+Retorna bloco de código responável por receber o objeto da View, realizar manipulações e devolver o objeto modificado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+method getViewDef() class GridDefView
+return ::bViewDef
+/*/{Protheus.doc} GridDefView::getStructGridView
+Retorna a estrutura do grid para a View
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return object, Retorna estrutura da view com a class FwFormViewStruct
+/*/
+method getStructGridView() class GridDefView
+	local oViewStruct := FWFormViewStruct():New()
+	local nField 	   := 0
+	local cTitle 	   := ""
+	local cToolTip	   := ""
+	local cIDField	   := ""
+	local cTipo		   := ""
+	local cOrdem	   := "00"
+	local cPicture	   := ""
+    local aFieldsTable := ::getFieldsTable()
+
+	for nField := 1 to len(::aStruct)
+		::aStruct[nField]:addField(oViewStruct)
+	next nField
+
+	for nField := 1 to len(aFieldsTable)
+		cOrdem := soma1(cOrdem)
+
+		cIDField	:= aFieldsTable[nField,1]
+
+		if !_Super:isLoadField(cIDField)
+			loop
+		endif
+
+		cTipo		:= aFieldsTable[nField,2]
+		cTitle 		:= ::getTitleField(cIDField)
+
+		if empty(cTitle)
+			cTitle 		:= getSX3Cache(cIDField,"X3_TITULO")
+			cToolTip	:= getSX3Cache(cIDField,"X3_DESCRIC")
+			cPicture	:= getSX3Cache(cIDField,"X3_PICTURE")
+		endif
+
+		if empty(cTitle)
+			cTitle := Capital(StrTran(cIDField,"_"," "))
+		endif
+
+		if empty(cToolTip)
+			cToolTip := cTitle
+		endif
+
+		if empty(cPicture)
+			cPicture := getPicture(cTipo,aFieldsTable[nField,3],aFieldsTable[nField,4])
+		endif
+
+		oViewStruct:addField(cIDField, cOrdem,cTitle, cToolTip, /*aHelp*/, cTipo,cPicture,/*bPictVar*/ )
+	next nField
+
+return oViewStruct
+/*/{Protheus.doc} GridDefView::setOnlyView
+Indica se a grid será apenas de visualização
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+@param lOnlyView, logical, Se true o grid sera apenas de visualizacao se false o grid poderá ser editivael
+/*/
+method setOnlyView(lOnlyView) class GridDefView
+	default lOnlyView := .f.
+	::lOnlyView := lOnlyView
+return
+/*/{Protheus.doc} GridDefView::getIDGridView
+Retorna o ID da view
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, ID da view
+/*/
+method getIDGridView() class GridDefView
+return ::cIDGridView
+/*/{Protheus.doc} GridDefView::markAll
+Realiza a marcação de todos as linhas do grid com base no campo definido em GridDefView:SetMarkField()
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param oView, object, Objeto da view
+/*/
+method markAll(oView,lInvert) class GridDefView
+	local oModel   := oView:getModel()
+	local oGrid    := oModel:getModel(::cIDGridModel)
+	local nLine    := 0
+	local aLineBkp := FWSaveRows(oModel)
+	local lMark    := .t.
+	local nQtdBeforeMark := 0
+	default lInvert := .f.
+	if !lInvert
+		lUltMark := !lUltMark
+		lMark 	 := lUltMark
+	endif
+
+	BEGIN SEQUENCE
+		if !lInvert .and. !eval(::getBeforeMark(),lMark,lInvert)
+			BREAK
+		endif
+
+		for nLine := 1 to oGrid:length()
+			oGrid:goLine(nLine)
+
+			if !oGrid:isdeleted()
+				if lInvert
+					lMark := !oGrid:getValue(::getMarkField())
+					if lMark .and. nQtdBeforeMark == 0 .and. !eval(::getBeforeMark(),lMark,lInvert)
+						BREAK
+					endif
+					if lMark
+						nQtdBeforeMark++
+					endif
+				endif
+				oGrid:setValue(::getMarkField(),lMark)
+			endif
+		next nLine
+		FwRestRows(aLineBkp)
+	END SEQUENCE
+return
+/*/{Protheus.doc} GridDefView::getBeforeMark
+Retorna o bloco de código com a ação que deve ser executada antes de marcar todos os registros
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return codeblock, bloco de código com a ação que deve ser executada antes de marcar todos os registros
+/*/
+method getBeforeMark() class GridDefView
+return ::bBeforeMark
+/*/{Protheus.doc} GridDefView::setBeforeMark
+Seta o bloco de código com a ação que deve ser executada antes de marcar todos os registros
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param bBeforeMark, codeblock, bloco de código com a ação que deve ser executada antes de marcar todos os registros
+/*/
+method setBeforeMark(bBeforeMark) class GridDefView
+	default bBeforeMark := {||.t.}
+	::bBeforeMark       := bBeforeMark
+return
+/*/{Protheus.doc} GridDefView::setTitleField
+Atribui titulo a um campo do Grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+@param cIDField, character, ID do campo
+@param cTitle, character, Titulo do Campo
+/*/
+method setTitleField(cIDField,cTitle) class GridDefView
+	aAdd(::aTitleField,{cIDField,cTitle})
+return
+/*/{Protheus.doc} GridDefView::getTitleField
+Recupera o titulo do campo atribuido pelo metodo SetTitleField
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 25/07/2021
+@param cIdField, character, Id do campo
+@return character, Titulo do campo
+/*/
+method getTitleField(cIdField) class GridDefView
+	local nPos   := aScan(::aTitleField,{|aTitle| upper(alltrim(aTitle[1])) == upper(alltrim(cIDField))})
+	local cTitle := ""
+	if nPos > 0
+		cTitle := ::aTitleField[nPos,2]
+	endif
+return cTitle
+/*/{Protheus.doc} GridDefView::addFieldStruct
+Adiciona um campo ao MVC através do objeto STRUCTMODEL
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param oStruct, object, Recebe objeto da classe StructModel com as definições do campo
+/*/
+method addFieldStruct(oStruct) class GridDefView
+	local nPos := aScan(::aStruct,{|X|X:getIdField() == oStruct:getIdField()})
+
+	if nPos > 0
+		::aStruct[nPos] := oStruct
+	else
+		aAdd(::aStruct,oStruct)
+	endif
+return
+/*/{Protheus.doc} GridDefView::setFieldStruct
+Recebe array de objetos StructModel com todos os campos que fazem parte do model 
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param aStruct, array, Array de objetos StructModel
+/*/
+method setFieldStruct(aStruct) class GridDefView
+	default aStruct := {}
+	::aStruct := aStruct
+return
+
+method setPercentGrid(nPercentual) class GridDefView
+	default nPercentual := 100
+	::nPercentGrid := nPercentual
+return 
+
+method getPercentGrid() class GridDefView
+return ::nPercentGrid
+
+method setPercentForm(nPercentual) class GridDefView
+	default nPercentual := 0
+	::nPercentForm := nPercentual
+return 
+
+method getPercentForm() class GridDefView
+return ::nPercentForm
+
+method setShowMarkAll(lShowMarkALl) class GridDefView
+	default lShowMarkAll := .t.
+
+	::lShowMarkAll := lShowMarkAll
+return
+/*
+Monta estrutura da View de tabela falsa para servir de cabeçalho da tela MVC
+Autor: Tiago Faria
+Data: 07/07/2021
+*/
+static function getTableFakeView()
+	local oViewStruct := FWFormViewStruct():New()
+	oViewStruct:addField("FAKE_01", "01" , "Field Fake 01", "Campo de texto", , "C" )
+return oViewStruct
+
+/*
+Retorna a picture do campo de acordo com o tipo, tamanho e decimal
+Autor: Tiago Faria
+Data: 07/07/2021
+*/
+static function getPicture(cTipo,nTamanho,nDecimal)
+	local cPicture := ""
+	if cTipo == "C"
+		cPicture := "@!"
+	elseif cTipo == "L"
+		cPicture := ""
+	elseif cTipo == "M"
+		cPicture := ""
+	elseif cTipo == "N"
+		cPicture := AVCALCPICT(nTamanho,nDecimal)
+	endif
+return cPicture

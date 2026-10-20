@@ -1,0 +1,135 @@
+#include 'totvs.ch'
+/*/{Protheus.doc} PVAuto
+Classe com funcionalidades do Pedido de Vendas
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 10/08/2021
+/*/
+class PVAuto
+
+	method new() CONSTRUCTOR
+	static method libEstoque()
+
+endclass
+
+method new() class PVAuto
+
+return
+/*/{Protheus.doc} PVAuto::libEstoque
+Realiza a liberação do estoque
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 10/08/2021
+@param nQtdLib, numeric, Quantidade a liberar do pedido
+@param nRecnoC9, numeric, Recno do SC9 para realizar o posicionamento no registro
+@param aSaldos, array, Array com os saldos
+@return logical, se true a liberação ocorreu com sucesso se false houve algum erro
+/*/
+method libEstoque(nQtdLib,nRecnoC9,aSaldos) class PVAuto
+	local nX         := 0
+	Local aLib       := {.T.,.T.,.T.,.T.}
+	local nOptLib    := SuperGetMv("MV_OPLBEST",.F.,0)
+	local nVlrCred   := 0
+	local nQtdAnt    := 0
+	local lEstornaC9 := .f.
+	local lRet       := .t.
+	Local lBlqRes    := SuperGetMv("MV_FTRESBL",.F.,.T.)
+	default nRecnoC9 := SC9->(recno())
+	default nQtdLib  := 0
+	default aSaldos  := {}
+
+	if nOptLib == 1
+		aLib := {.T.,.T.,.T.,.T.}
+	elseif nOptLib == 2
+		aLib := {.T.,.T.,.F.,.T.}
+	elseif nOptLib == 3
+		aLib := {.T.,.T.,.F.,.F.}
+	endif
+
+	if nRecnoC9 <> SC9->(RECNO())
+		SC9->(dbGoTo(nRecnoC9))
+	endif
+
+	if SC6->(C6_FILIAL+C6_NUM+C6_ITEM) <> SC9->(C9_FILIAL+C9_PEDIDO+C9_ITEM)
+		posicione("SC6",1,xFilial("SC6")+SC9->(C9_PEDIDO+C9_ITEM),"!Eof()")
+	endif
+
+	if SC5->(C5_FILIAL+C5_NUM) <> SC9->(C9_FILIAL+C9_PEDIDO)
+		posicione("SC5",1,xFilial("SC5")+SC9->(C9_PEDIDO),"!eof()")
+	endif
+
+
+	BEGIN TRANSACTION
+		nVlrCred    := 0
+		nQtdAnt     := SC9->C9_QTDLIB - nQtdLib
+		lEstornaC9  := nQtdLib < SC9->C9_QTDLIB
+
+		if lEstornaC9
+			If IntWms(SC9->C9_PRODUTO) .And. !Empty(SC9->C9_SERVIC) .AND. !WmsAvalSC6("4")
+				lRet := .f.
+			EndIf
+
+			//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+			//³ Estorna a liberacao atual                                    ³
+			//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+			if lEstornaC9 .and. !SC9->(A460Estorna(/*lMata410*/,/*lAtuEmp*/,@nVlrCred))
+				lRet := .f.
+			endif
+
+			//ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+			//³ Libera novamente de acordo com a opcao do radio selecionada  ³
+			//ÀÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+			if lRet
+				If Len(aSaldos)>0
+					For nX := 1 To Len(aSaldos)
+						If nQtdLib > 0
+							RecLock("SC6",.f.)
+							SC6->C6_LOTECTL := aSaldos[nX][1]
+							SC6->C6_NUMLOTE := aSaldos[nX][2]
+							//-- Grava o endereco somente quando NAO ha integracao com o wms
+							If	!(IntDL(SC6->C6_PRODUTO) .And. !Empty(SC6->C6_SERVIC))
+								SC6->C6_LOCALIZ := aSaldos[nX][3]
+							EndIf
+							SC6->C6_NUMSERI := aSaldos[nX][4]
+							SC6->C6_DTVALID := aSaldos[nX][7]
+							SC6->C6_POTENCI := aSaldos[nX][6]
+							MaLibDoFat(SC6->(RecNo()),Min(aSaldos[nX][5],nQtdLib),aLib[1],aLib[2],aLib[3],aLib[4],.F.,.F.,/*aEmpenho*/,/*bBlock*/,/*aEmpPronto*/,/*lTrocaLot*/,/*lOkExpedicao*/,@nVlrCred,/*nQtdalib2*/)
+							nQtdLib -= aSaldos[nX][5]
+
+							If Len(aSaldos) > 1 .Or. Empty(SC6->C6_NUMSERI)
+								SC6->C6_LOTECTL := ''
+								SC6->C6_NUMLOTE := ''
+								SC6->C6_LOCALIZ := ''
+								SC6->C6_NUMSERI := ''
+								SC6->C6_DTVALID := Ctod('')
+								SC6->C6_POTENCI := 0
+							EndIf
+						EndIf
+					Next nX
+				Else
+					//if nQtdLib > 0
+					MaLibDoFat(SC6->(RecNo()),@nQtdLib,aLib[1],aLib[2],aLib[3],aLib[4],.F.,.F.,/*aEmpenho*/,/*bBlock*/,/*aEmpPronto*/,/*lTrocaLot*/,/*lOkExpedicao*/,@nVlrCred,/*nQtdalib2*/)
+					lRet := empty(SC9->C9_BLEST)
+					//endif
+				EndIf
+				If ( SuperGetMv("MV_GRVBLQ2" ) .And. nQtdAnt > 0)
+					MaLibDoFat(SC6->(RecNo()),@nQtdAnt,.T.,.F.,lBlqRes,.F.,.F.,.F.,/*aEmpenho*/,/*bBlock*/,/*aEmpPronto*/,/*lTrocaLot*/,/*lOkExpedicao*/,@nVlrCred,/*nQtdalib2*/)
+				EndIf
+				SC6->(MaLiberOk({SC9->C9_PEDIDO},.F.))
+			else
+				disarmTransaction()
+			endif
+		else
+			a450Grava(1,.F.,.T.,Nil,aSaldos)
+			lRet := empty(SC9->C9_BLEST)
+		endif
+	END TRANSACTION
+
+	// Integrado ao wms devera avaliar as regras para convocação do serviço
+	// e disponibilizar os registros de atividades do WMS para convocação
+	If IntWms()
+		WmsAvalExe()
+	EndIf
+return lRet

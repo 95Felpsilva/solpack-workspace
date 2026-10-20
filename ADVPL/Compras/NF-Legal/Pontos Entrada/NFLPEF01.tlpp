@@ -1,0 +1,30 @@
+#include "protheus.ch"
+#include "rwmake.ch"
+
+/*/{Protheus.doc} NFLPEF01
+    Configura��o de Empresa e Filial por Schedule
+
+    Cliete: Megaplasma
+
+ @type function
+ @version v1.0
+ @author Eduarda Menezes
+ @since 20/10/2023
+ @nested-tags: Pontos de Entrada
+/*/
+User Function NFLPEF01(cProcesso) 
+    Local aParam    := {}
+
+    If  cProcesso == "MONNF002"         .OR.; // Sincroniza��o NF-e via JOB
+        cProcesso == "MONNF024"         .OR.; // Sincroniza��o CT-e via JOB
+        cProcesso == "NFLNFSESCHEDULE"  .OR.; // Sincroniza��o NFS-e via JOB
+        cProcesso == "SYNC_NFSE"  	    .OR.;  // Sincroniza��o NFS-e via JOB
+        cProcesso == "MANIFEST1"        .OR.; // Manifesta��o do destinat�rio - Ci�ncia da opera��o e Confirma��o da opera��o de forma autom�tica
+        cProcesso == "MANIFEST2"              // Sintoniza as tabelas de NFL_EVENTS(NFLegal) e SPED150/TSS
+
+        // Empresa/Filial
+			aAdd(aParam , { '01' , '01' })       // 02.639.570/0001-51 - Solpack Ltda
+        
+    EndIf
+
+Return(aParam)

@@ -1,0 +1,507 @@
+#include 'totvs.ch'
+#Include 'FWMVCDEF.CH'
+/*/{Protheus.doc} StructView
+Classe com as definições para criação de um novo campo no MVC
+@type class
+@version 12.1.27  
+@author Tiago Faria
+@since 30/07/2021
+/*/
+class StructView
+	data cIdField
+	data cOrder
+	data cTitle
+	data cDescric
+	data aHelp
+	data cType
+	data cPicture
+	data bPictVar
+	data cLookUp
+	data lCanChange
+	data cFolder
+	data cGroup
+	data aComboValues
+	data nMaxLenCombo
+	data cIniBrow
+	data lVirtual
+	data cPictVar
+	data lInsertLine
+	data nWidth
+
+	public method new() CONSTRUCTOR
+	public method addField()
+	public method getComboValues()
+	public method getHelp()
+	public method getPictVar()
+	public method getDescric()
+	public method getFolder()
+	public method getGroup()
+	public method getIdField()
+	public method getIniBrow()
+	public method getLookUp()
+	public method getOrder()
+	public method getPicture()
+	public method getTitle()
+	public method getType()
+	public method getMaxLenCombo()
+	public method getWidth()
+	public method isCanChange()
+	public method isInsertLine()
+	public method isVirtual()
+
+	private method setPictVar()
+
+	public method setComboValues()
+	public method setHelp()
+	public method setDescric()
+	public method setFolder()
+	public method setGroup()
+	public method setIdField()
+	public method setIniBrow()
+	public method setLookUp()
+	public method setOrder()
+	public method setPicture()
+	public method setTitle()
+	public method setType()
+	public method setMaxLenCombo()
+	public method setWidth()
+	public method setCanChange()
+	public method setInsertLine()
+	public method setVirtual()
+endclass
+/*/{Protheus.doc} StructView::new
+Método consturtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+/*/
+method new() class StructView
+	::setComboValues()
+	::setHelp()
+	::setDescric()
+	::setFolder()
+	::setGroup()
+	::setIdField()
+	::setIniBrow()
+	::setLookUp()
+	::setOrder()
+	::setPicture()
+	::setTitle()
+	::setType()
+	::setMaxLenCombo()
+	::setWidth()
+	::setCanChange()
+	::setInsertLine()
+	::setVirtual()
+return
+/*/{Protheus.doc} StructModel::addField
+Adiciona os campos no model recebido por parametro
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param oStruct, object, Objeto FWFORMVIEWSTRUCT que terá o campo adicionado
+/*/
+method addField(oStruct) class StructView
+	oStruct:AddField(::getIdField(), ::getOrder(), ::getTitle(), ::getDescric(), ::getHelp(), ::getType(), ::getPicture(), ::getPictVar(),::getLookUp(), ::isCanChange(), ::getFolder(), ::getGroup(), ::getComboValues(), ::getMaxLenCombo(), ::getIniBrow(), ::isVirtual(), ::getPictVar(), ::isInsertLine(), ::getWidth())
+return
+/*/{Protheus.doc} StructView::getComboValues
+Array com os Valores do combo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return array, Array com os Valores do combo
+/*/
+method getComboValues() class StructView
+return ::aComboValues
+/*/{Protheus.doc} StructView::getHelp
+Array com o Help dos campos
+@type method
+@version  12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return array, Array com o Help dos campos
+/*/
+method getHelp() class StructView
+return ::aHelp
+/*/{Protheus.doc} StructView::getPictVar
+Bloco de picture Var
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return codeblock, Bloco de picture Var
+/*/
+method getPictVar() class StructView
+return ::bPictVar
+/*/{Protheus.doc} StructView::getDescric
+Descricao completa do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, 	Descricao completa do campo
+/*/
+method getDescric() class StructView
+return ::cDescric
+/*/{Protheus.doc} StructView::getFolder
+Id da Folder onde o field esta
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Id da Folder onde o field esta
+/*/
+method getFolder() class StructView
+return ::cFolder
+/*/{Protheus.doc} StructView::getGroup
+Id do Group onde o field esta
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Id do Group onde o field esta
+/*/
+method getGroup() class StructView
+return ::cGroup
+/*/{Protheus.doc} StructView::getIdField
+	Id do Field
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, 	Id do Field
+/*/
+method getIdField() class StructView
+return ::cIdField
+/*/{Protheus.doc} StructView::getIniBrow
+Inicializador do Browse
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Inicializador do Browse
+/*/
+method getIniBrow() class StructView
+return ::cIniBrow
+/*/{Protheus.doc} StructView::getLookUp
+Chave para ser usado no LooKUp
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Chave para ser usado no LooKUp
+/*/
+method getLookUp() class StructView
+return ::cLookUp
+/*/{Protheus.doc} StructView::getOrder
+Ordem de apresentação do campo na tela
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Ordem de apresentação do campo na tela
+/*/
+method getOrder() class StructView
+return ::cOrder
+/*/{Protheus.doc} StructView::getPicture
+Picture do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Picture do campo
+/*/
+method getPicture() class StructView
+return ::cPicture
+/*/{Protheus.doc} StructView::getTitle
+Título do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Título do campo
+/*/
+method getTitle() class StructView
+return ::cTitle
+/*/{Protheus.doc} StructView::getType
+Tipo do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return character, Tipo do campo
+/*/
+method getType() class StructView
+return ::cType
+/*/{Protheus.doc} StructView::getMaxLenCombo
+Tamanho maximo da maior opção do combo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return numeric, Tamanho maximo da maior opção do combo
+/*/
+method getMaxLenCombo() class StructView
+return ::nMaxLenCombo
+/*/{Protheus.doc} StructView::getWidth
+Largura fixa da apresentação do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return numeric, Largura fixa da apresentação do campo
+/*/
+method getWidth() class StructView
+return ::nWidth
+/*/{Protheus.doc} StructView::isCanChange
+Logico dizendo se o campo pode ser alterado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return logical, Logico dizendo se o campo pode ser alterado
+/*/
+method isCanChange() class StructView
+return ::lCanChange
+/*/{Protheus.doc} StructView::isInsertLine
+Se verdadeiro, indica pulo de linha após o campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return logical, Se verdadeiro, indica pulo de linha após o campo
+/*/
+method isInsertLine() class StructView
+return ::lInsertLine
+/*/{Protheus.doc} StructView::isVirtual
+Indica se o campo é virtual
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@return logical, Indica se o campo é virtual
+/*/
+method isVirtual() class StructView
+return ::lVirtual
+/*/{Protheus.doc} StructView::setComboValues
+Array com os Valores do combo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param aComboValues, array, Array com os Valores do combo
+/*/
+method setComboValues(aComboValues) class StructView
+	default aComboValues := {}
+	::aComboValues := aComboValues
+return
+/*/{Protheus.doc} StructView::setHelp
+Array com o help de campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param aHelp, array, Array com o help de campo
+/*/
+method setHelp(aHelp) class StructView
+	default aHelp := {}
+	::aHelp := aHelp
+return
+/*/{Protheus.doc} StructView::setPictVar
+Picture variavel
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cPictVar, character, Picture variavel
+/*/
+method setPictVar(cPictVar) class StructView
+	default cPictVar := ""
+	::cPictVar := cPictVar
+return
+/*/{Protheus.doc} StructView::setDescric
+Descricao completa do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cDescric, character, Descricao completa do campo
+/*/
+method setDescric(cDescric) class StructView
+	default cDescric := ""
+	::cDescric := cDescric
+return
+/*/{Protheus.doc} StructView::setFolder
+Id da Folder onde o field esta
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cFolder, character, Id da Folder onde o field esta
+@return character, Id da Folder onde o field esta
+/*/
+method setFolder(cFolder) class StructView
+	default cFolder := ""
+
+	::cFolder := cFolder
+return
+/*/{Protheus.doc} StructView::setGroup
+Id do Group onde o field esta
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cGroup, character, Id do Group onde o field esta
+/*/
+method setGroup(cGroup) class StructView
+	default cGroup := ""
+	::cGroup := cGroup
+return
+/*/{Protheus.doc} StructView::setIdField
+Id do Field
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cIDField, character, Id do Field
+/*/
+method setIdField(cIDField) class StructView
+	default cIDField := ""
+	::cIDField := cIDField
+return
+/*/{Protheus.doc} StructView::setIniBrow
+Inicializador do Browse
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cIniBrow, character, Inicializador do Browse
+/*/
+method setIniBrow(cIniBrow) class StructView
+	default cIniBrow := ""
+	::cIniBrow := cIniBrow
+return
+/*/{Protheus.doc} StructView::setLookUp
+Chave para ser usado no LooKUp
+@type method
+@version 12.1.27
+@author Tiaog Faria
+@since 30/07/2021
+@param cLookUp, character, Chave para ser usado no LooKUp
+/*/
+method setLookUp(cLookUp) class StructView
+	default cLookUp := ""
+	::cLookUp := cLookUp
+return
+/*/{Protheus.doc} StructView::setOrder
+Ordem do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cOrder, character, Ordem do campo
+/*/
+method setOrder(cOrder) class StructView
+	default cOrder := "01"
+	::cOrder := cOrder
+return
+/*/{Protheus.doc} StructView::setPicture
+Picture do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cPicture, character, Picture do campo
+/*/
+method setPicture(cPicture) class StructView
+	default cPicture := ""
+	::cPicture := cPicture
+	//::setPictVar(FWBuildFeature( STRUCT_FEATURE_PICTVAR, ::cPicture ))
+return
+/*/{Protheus.doc} StructView::setTitle
+Titulo do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cTitle, character, Titulo do campo
+/*/
+method setTitle(cTitle) class StructView
+	default cTitle := ""
+	::cTitle := cTitle
+return
+/*/{Protheus.doc} StructView::setType
+Tipo do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param cType, character, Tipo do campo
+/*/
+method setType(cType) class StructView
+	default cType := cType
+	::cType := cType
+return
+/*/{Protheus.doc} StructView::setMaxLenCombo
+Tamanho maximo da maior opção do combo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param nMaxLenCombo, numeric, Tamanho maximo da maior opção do combo
+/*/
+method setMaxLenCombo(nMaxLenCombo) class StructView
+	default nMaxLenCombo := 0
+	::nMaxLenCombo := nMaxLenCombo
+return
+/*/{Protheus.doc} StructView::setWidth
+Largura fixa da apresentação do campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param nWidth, numeric, Largura fixa da apresentação do campo
+/*/
+method setWidth(nWidth) class StructView
+	default nWidth := 0
+	::nWidth := nWidth
+return
+/*/{Protheus.doc} StructView::setCanChange
+Logico dizendo se o campo pode ser alterado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param lCanChange, logical, Logico dizendo se o campo pode ser alterado
+/*/
+method setCanChange(lCanChange) class StructView
+	default lCanChange := .t.
+	::lCanChange := lCanChange
+return
+/*/{Protheus.doc} StructView::setInsertLine
+Se verdadeiro, indica pulo de linha após o campo
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param lInsertLine, logical, 	Se verdadeiro, indica pulo de linha após o campo
+/*/
+method setInsertLine(lInsertLine) class StructView
+	default lInsertLine := .f.
+	::lInsertLine := lInsertLine
+return
+/*/{Protheus.doc} StructView::setVirtual
+Indica se o campo é virtual
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param lVirtual, logical, Indica se o campo é virtual
+/*/
+method setVirtual(lVirtual) class StructView
+	default lVirtual := .t.
+	::lVirtual:= lVirtual
+return

@@ -1,0 +1,296 @@
+#include 'totvs.ch'
+#Include "FILEIO.CH"
+
+static DIRECTORY_NAME := 1
+static DIRECTORY_TYPE := 5
+
+static cBar := "\"//iif(IsSrvUnix(),"/","\")
+
+class FileIO
+
+	static method makeFolder()
+	static method removeFolder()
+	static method removeFile()
+	static method copyFiles()
+	static method createFile()
+	static method writeFile()
+	static method openFile()
+endclass
+/*/{Protheus.doc} FileIO():makeFolder()
+    Cria todas as pastas do caminho recebido por parametro por exemplo
+    @type  Function
+    @author user
+    @since 28/08/2020
+    @version 1.0
+    @param cPath, character, path com as pastas a serem criadas
+    @return logical, se true as pastas foram criadas com sucesos se false ocorreu alguma falha
+    @example ..
+    //avalia se a pasta c: existe, caso não exista cria
+    //avalia se a pasta c:\temp existe, caso não exista cria
+    //avalia se a pasta c:\temp\teste existe, caso não exista cria
+    //avalia se a pasta c:\temp\teste\teste2 existe, caso não exista cria
+    lOK := FileIO():makeFolder("c:\temp\teste\teste2\")
+/*/
+method makeFolder(cPath,lChangeCase) class FileIO
+	local lRet          := .t.
+	local aPath         := {}
+	local nPath         := 0
+	local cPathPart     := ""
+	local lBarra        := .t.
+	default lChangeCase := .f.
+	default cPath       := ""
+
+	aPath   := strToKarr(cPath,cBar)
+	lBarra  := subStr(cPath,1,1) == cBar
+
+	for nPath := 1 to len(aPath)
+		//se passar o path com o arquivo ignora a parte com a extensao do arquivo exemplo c:\temp\teste.pdf cria a pasta até o \temp
+		if "." $ aPath[nPath]
+			loop
+		endif
+
+		if (nPath == 1 .and. lBarra) .or. nPath > 1
+			cPathPart += cBar
+		endif
+
+		cPathPart += aPath[nPath]
+		if !existDir(cPathPart)
+			lRet := makeDir(cPathPart,,lChangeCase) == 0
+
+			if !lRet
+				exit
+			endif
+		endif
+	next nPath
+return lRet
+/*/{Protheus.doc} FileIO():removeFolder()
+    Percorre toda a arvore de pastas e arquivos abaixo do diretorio passado por parametro e remove
+    Apaga o diretorio recebido por parametro, caso o parametro lDeletePath seja TRUE
+    @type  Function
+    @author user
+    @since 28/08/2020
+    @param cPath, character, diretorio a ser apagado
+    @param lDeletePath, logical, se true deleta a pasta recebida por parametro se false só deleta o que está abaixo da pasta e mantém o diretorio recebido por parametro
+    @return logical, se true apagou o diretorio com sucesso se false ocorreu algum erro
+    @example 
+    avalia tudo que há abaixo da pasta c:\temp apagar e deleta a pasta temp
+    lOK := FileIO():removeFolder("c:\temp\")
+/*/
+method removeFolder(cPath,lDeletePath) class FileIO
+	local aFiles        := directory(cPath + "*.*","D")
+	local nFile         := 0
+	local cFile         := ""
+	local lRet          := .t.
+	local lFolder       := .t.
+	default cPath       := ""
+	default lDeletePath := .t.
+
+	for nFile := 1 to len(aFiles)
+		cFile   := aFiles[nFile][DIRECTORY_NAME]
+		lFolder := aFiles[nFile][DIRECTORY_TYPE] == "D"
+
+		if lFolder
+			//pastas oculta do servidor da glovis que nao devem ser avaliadas, pois toda pasta criada tem a pasta . e .. abaixo dela
+			if cFile == "." .or. cFile == ".."
+				loop
+			endif
+
+			lRet := FileIO():removeFolder(cPath + cFile + cBar,.t.)
+			if !lRet
+				exit
+			endif
+		else
+			if !FileIO():removeFile(cPath + cFile)
+				lRet := .f.
+			endif
+		endif
+
+	next nFile
+	if lRet .and. lDeletePath
+		lRet := dirRemove(cPath)
+	endif
+return lRet
+/*/{Protheus.doc} FileIO():removeFile()
+    Remove o arquivo recebido por parametro
+    @type  Function
+    @author user
+    @since 28/08/2020
+    @param cFile, character, caminho absoluto do arquivo a ser deletado
+    @return logical, se true apagou o diretorio com sucesso se false ocorreu algum erro
+/*/
+method removeFile(cFile) class FileIO
+	local lRet      := .t.
+	default cFile   := ""
+
+	if file(cFile)
+		if fErase(cFile) <> 0
+			lRet := .f.
+		endif
+	endif
+return lRet
+/*/{Protheus.doc} FileIO():copyFiles()
+    Copia arquivos para caminho informado por parametro
+    @type  Function
+    @author user
+    @since 28/08/2020
+    @param aFiles, array, array com os arquivos a ser movidos, pode ser enviado uma matriz onde a 1ª posição é o caminho completo do arquivo e a 2ª posiição é o nome do arquivo
+    @param cPathMove, character, string com o caminho que deve ser movido os arquivos
+    @param lDeleteFile, logical, se true indica que deve deletar o arquivo após a copia se false mantem o arquivo na pasta
+    @return logical, se true os arquivos foram movidos com sucesso se false houve algum erro
+/*/
+method copyFiles(aFiles,cPathMove,lDeleteFile) class FileIO
+	local cFile         := ""
+	local cFIleName     := ""
+	local cType         := ""
+	local lRet          := .t.
+	local nFile         := 0
+	local xFile         := nil
+	local lPathServer 	:= substring(cPathMove,1,1) $ "\/"
+	local lPathFileServer:= .f.
+	default aFiles      := {}
+	default cPathMove   := ""
+	default lDeleteFile := .f.
+
+	if !(right(cPathMove,1) $ "\/")
+		cPathMove += "\"
+	endif
+
+	if lPathServer .and. IsSrvUnix()
+		cPathMove := strtran(cPathMove,"\","/")
+	endif
+
+
+	FileIO():makeFolder(cPathMove)
+
+	for nFile := 1 to len(aFiles)
+		xFile := aFiles[nFile]
+		cType := valType(xFile)
+
+		if cType == "A"
+			cFile       := aFiles[nFile][1]
+			cFileName   := aFiles[nFile][2]
+		endif
+
+		if cType == "C"
+			cFile := xFile
+			aNameFile := strToKarr(cFile,cBar)
+			cFileName := aNameFile[len(aNameFile)]
+		endif
+
+		lPathFileServer := substring(cFile,1,1) $ "\/"
+
+		if lPathServer .and. !lPathFileServer
+			lRet := CpyT2S( cFile, cPathMove, /*lCompress */,/* lChangeCase */, /*nLenBuffer */)
+		else
+			lRet := __copyFile(cFile,cPathMove+cFileName)
+		endif
+
+		if !lRet
+			exit
+		else
+			aFiles[nFile] := cPathMove + cFileName
+			if lDeleteFile
+				lRet := fErase(cFile) == 0
+			endif
+		endif
+	next nFile
+return lRet
+/*/{Protheus.doc} FileIO::createFile
+Criar arquivo no diretório informado, caso o diretório não exista cria as pastas também
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 10/06/2021
+@param cFile, character, Caminho completo + nome do arquivo
+@param lCaseSensitive, logical, Indica se o nome utilizado para arquivo será respeitado o case Senstive. Default .F. 
+@param cContent, character, Conteudo a ser escrito no arquivo criado. Default vazio
+@return logical, se true o arquivo foi criado com sucesso, se false não foi
+/*/
+method createFile(cFile,lCaseSensitive,cContent) class FileIO
+	local lRet              := .t.
+	local oFile             := FwFileIOBase():new(cFile)
+	default lCaseSensitive  := .f.
+	default cContent        := ""
+
+	oFile:SetCaseSensitive(lCaseSensitive)
+	oFile:CreateDirectory()
+	if !oFile:exists()
+		lRet := oFile:create()
+	else
+		//apaga o arquivo existente e cria um novo
+		lRet := oFile:clear(/*lCreate*/)
+	endif
+
+	oFile:close()
+
+	if !empty(cContent)
+		FileIO():writeFile(cContent,,cFile)
+	endif
+return lRet
+/*/{Protheus.doc} FileIO::writeFile
+Método responsável por escrever no arquivo
+@type method
+@version 1.0
+@author Tiago Faria
+@since 15/12/2020
+@param cContent, character, Conteudo do arquivo
+@param oFileWrite, object, Objeto FwFileWriter caso o arquivo já esteja aberto ou for um processamento com várias escritas no arquivo
+@param cFile, character, Caminho completo do arquivo Ex: c:\temp\teste.txt
+@param lBuffer, logical, Indica se deve gravar no arquivo com buffer, default .f.
+@return logical, Se true a escrita foi realizada com sucesso
+/*/
+method writeFile(cContent,oFileWrite,cFile,nBuffer) class FileIO
+	local lRet              := .t.
+	local lClose            := .f.
+	local lBuffer			:= .f.
+	default lCaseSensitive  := .f.
+	default cContent        := ""
+	default oFileWrite      := nil
+	default nBuffer         := 0
+
+	lBuffer := nBuffer > 0
+
+	if valType(oFileWrite) == "U"
+		lClose := .t.
+		oFileWrite := FwFileWriter():new(cFile,lBuffer,nBuffer)
+		if !oFileWrite:exists()
+			lRet := oFileWrite:create() .and. oFileWrite:open(FO_READWRITE)
+		else
+			lRet := oFileWrite:open(FO_READWRITE)
+		endif
+	endif
+	if lRet
+		lRet := oFileWrite:write(cContent)
+	endif
+	if lClose
+		oFileWrite:close()
+	endif
+return lRet
+/*/{Protheus.doc} FileIO::openFile
+Abre arquivo no sistema operacional do usuário através da função ShellExecute
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 10/06/2021
+@param cFullPath, character, Caminho completo do arquivo com o nome
+@return logical, Se true arquivo foi aberto com sucesso se false houve erro
+/*/
+method openFile(cFullPath) class FileIO
+	local lRet := .t.
+	local cTempPath := ""
+	BEGIN SEQUENCE
+		if substr(cFullPath,1,1) == cBar
+			cTempPath := getTempPath()
+			if !FileIO():copyFiles({cFullPath},cTempPath)
+				BREAK
+			endif
+		endif
+
+		if ShellExecute("open",cTempPath + cFullPath,"","",5) <= 32
+			break
+		endif
+
+		RECOVER
+		lRet := .f.
+	END SEQUENCE
+return lRet

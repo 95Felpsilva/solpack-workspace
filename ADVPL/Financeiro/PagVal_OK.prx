@@ -1,0 +1,32 @@
+#include "rwmake.ch"
+
+////////////////////////////////////////////////////////////////////////////////////
+//                                                                                //
+//  Retorna o Valor do Documento, conforme o Código de Barras e Linha Digitável.  //
+//                                                                                //
+////////////////////////////////////////////////////////////////////////////////////
+
+User Function PagVal()
+
+// Declaração das Variáveis.
+Local _cRet	:= Replicate("0",15)
+
+If SEE->EE_CODIGO == "237"
+	IF !EMPTY(SE2->E2_CODBAR)
+		_cRet	:= "0" + SUBSTR(SE2->E2_CODBAR,6,14)
+	ElseIf !Empty(SE2->E2_IPTE)
+		_cRet	:= "0" + SUBSTR(SE2->E2_IPTE,34,14)
+	Else
+		_cRet	:= StrZero(SE2->E2_SALDO,14)
+	Endif
+Else
+	IF !EMPTY(SE2->E2_CODBAR)
+		_cRet   := SUBSTR(SE2->E2_CODBAR,10,10)
+	ElseIf !Empty(SE2->E2_IPTE)
+		_cRet       := StrTran(SUBSTR(SE2->E2_IPTE,38,10) ," ","0")
+	Else
+		_cRet   := StrZero(SE2->E2_SALDO,10)
+	Endif
+EndIf
+
+Return(_cRet)

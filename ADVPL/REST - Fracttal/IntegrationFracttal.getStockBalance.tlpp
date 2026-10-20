@@ -1,0 +1,157 @@
+#include "totvs.ch"
+#include "tlpp-core.th"
+#include "tlpp-rest.th"
+
+namespace IntegrationFracttal
+
+/*/{Protheus.doc} getStockBalance
+
+Retorna lista de saldo em estoque por produto
+
+@type function
+@author Gabriel Pereira Santos - CRM Services
+@since 24/01/2024
+@version P12
+@database MSSQL
+
+@param [oClassRestFul], object, Objeto da Classe RESTFUL recebido do fonte com a definição das API's
+@param [oRest], object, Objeto da Classe Rest do TLPP recebido do fonte com a definição das API's
+
+@return logical, lRet - Indica se foi processado com sucesso
+/*/ 
+User Function getStockBalance(oClassRestFul as object, oRest as object) as character	
+	Local cJsonResponse			:= "" as character
+	Local cQueryHeader			:= "" as character
+	Local nStatusCode			:= 0 as numeric
+    Local lUseTmpTable			:= .F. as logical
+    Local lRetExecuteAPIREST	:= .T. as logical
+
+	Private oFwAdapterBaseV2	:= NIL as object
+	Private cWhere		 		:= "" as character 
+	Private cFilter		 		:= "" as character 
+	Private nPage				:= 1 as numeric 
+	Private nPageSize		 	:= 50 as numeric 
+	Private aQueryString 	 	:= {} as array 
+
+	oFwAdapterBaseV2 	:= FwAdapterBaseV2():New("GET")
+
+	getParamResquest()
+    oFwAdapterBaseV2:setPage(nPage)
+    oFwAdapterBaseV2:setPageSize(nPageSize)
+
+	createMapaCampos()
+	cQueryHeader := getQryStockBalance()
+
+	oFwAdapterBaseV2:SetQuery(cQueryHeader)
+	oFwAdapterBaseV2:SetWhere(cWhere)
+	oFwAdapterBaseV2:SetOrder("")
+	If ( Len(aQueryString) > 0 )
+		oFwAdapterBaseV2:SetUrlFilter(aQueryString)
+	EndIf
+
+	lRetExecuteAPIREST := oFwAdapterBaseV2:Execute(lUseTmpTable)
+
+	If ( lRetExecuteAPIREST )
+		oFwAdapterBaseV2:FillGetResponse()
+		cJsonResponse 		:= oFwAdapterBaseV2:GetJSONResponse()
+		nStatusCode 		:= oFwAdapterBaseV2:GetCode()
+	Else
+		cJsonResponse 		:= AllTrim(oFwAdapterBaseV2:cMessage)
+		nStatusCode 		:= oFwAdapterBaseV2:GetCode()
+	EndIf
+
+	freeObj(oFwAdapterBaseV2)
+
+	oRest:setKeyHeaderResponse("Content-Type", "Application/Json;charset=utf-8")
+	oRest:setResponse(EncodeUTF8(cJsonResponse))					
+	oRest:setStatusCode(nStatusCode)
+
+Return cJsonResponse
+
+/*
+	Cria mapa de campos a ser retornado na API
+*/
+Static Function createMapaCampos() as variant
+	oFwAdapterBaseV2:AddMapFields("affiliate_code"          , "B2_FILIAL", .T., .T., { "B2_FILIAL", "C", tgv.util.GetFieldLength("B2_FILIAL"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("product"					, "B2_COD", .T., .F., { "B2_COD", "C", tgv.util.GetFieldLength("B2_COD"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("location"	            , "B2_LOCAL", .T., .F., { "B2_LOCAL", "C", tgv.util.GetFieldLength("B2_LOCAL"), 0 } )
+    oFwAdapterBaseV2:AddMapFields("balance"	            	, "SALDOSB2", .T., .F., { "SALDOSB2", "N", tgv.util.GetFieldLength("B2_QATU"), 0 } )
+
+Return
+
+/*
+	Cria query de executação da API
+*/
+Static Function getQryStockBalance() as character
+	Local cQuery	:= "" as character
+
+    DBSelectArea("SB1")
+
+	cQuery := " SELECT " + CRLF
+	cQuery += "     B2_FILIAL " + CRLF
+	cQuery += "     ,B2_COD " + CRLF
+	cQuery += "     ,B2_LOCAL " + CRLF
+	cQuery += "     ,COALESCE((B2_QATU - B2_RESERVA - B2_QEMP - B2_QACLASS), 0) SALDOSB2 " + CRLF
+	cQuery += " FROM " + CRLF 
+    cQuery +=       RetSqlTab("SB2") + CRLF
+    cQuery += "		INNER JOIN " + RetSqlTab("SB1") + " ON 1 = 1" + CRLF
+	cQuery += " 		AND " + RetSqlFil("SB1") + CRLF
+	cQuery += "     	AND B1_COD = B2_COD " + CRLF
+	cQuery += " 		AND " + RetSqlDel("SB1") + CRLF
+	cQuery += " WHERE " + CRLF
+	cQuery += "     1 = 1" + CRLF
+	cQuery += "     AND (B2_QATU - B2_RESERVA - B2_QEMP - B2_QACLASS) >= 0" + CRLF
+	If SB1->(FieldPos("B1_ZZFRACT")) > 0
+	    cQuery += "     AND B1_ZZFRACT = '1'" + CRLF
+    EndIf
+    cQuery += "     AND " + RetSqlDel("SB2") + CRLF
+    
+    cQuery := "SELECT #QueryFields# FROM (" + cQuery + ") SUBQRYREST WHERE 1 = 1 AND #QueryWhere#"
+
+Return cQuery
+
+/*
+	Rotina para recuperar parâmetros enviados
+*/
+Static Function getParamResquest()
+	Local aParams	:= {} as array
+	Local cParam	:= "" as character
+	Local cContent	:= "" as character
+	Local nParam	:= 1 as numeric
+
+	nPage := oRest:getQueryRequest()["Page"]
+
+	If ( Empty(nPage) )
+		nPage := 1
+	Endif
+	If ( ValType(nPage) == "C" )
+		nPage := Val(nPage)
+	Endif
+
+	nPageSize := oRest:getQueryRequest()["PageSize"]
+	
+	If ( Empty(nPageSize) )
+		nPageSize := 50
+	Endif
+	If ( ValType(nPageSize) == "C" )
+		nPageSize := Val(nPageSize)
+	Endif
+	
+	cWhere := oRest:getQueryRequest()["Where"]
+	If ( Empty(cWhere) )
+		cWhere := "1 = 1"
+	Endif
+	
+	aParams := oRest:getQueryRequest():GetNames()
+
+	If ( Len(aParams) > 0 )
+		For nParam:=1 To Len(aParams)
+			cParam 	:= aParams[nParam]
+			cContent:= oRest:getQueryRequest()[cParam]
+
+			If ( !Empty(cParam) .And. !( Upper(AllTrim(cParam)) $ "PAGESIZE,PAGE,WHERE" ) )
+				aAdd(aQueryString, {cParam, cContent})
+			EndIf
+		Next nParam
+	EndIf 
+Return

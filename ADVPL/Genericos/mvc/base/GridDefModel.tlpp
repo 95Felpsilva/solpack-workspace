@@ -1,0 +1,302 @@
+#include 'totvs.ch'
+#include 'FwMVCDef.ch'
+/*/{Protheus.doc} GridDefModel
+Classe com as definições do Model para o GRID
+@type class
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+/*/
+class GridDefModel from GridDefCommon
+	data cIDModel     as character
+	data cIDGridModel as character
+	data cTitle		  as character
+	data bLoadGrid    as codeblock
+	data aStruct	  as array
+
+	private data aModelEvent  as array
+	private data bModelDef as codeblock
+
+	public method new() CONSTRUCTOR
+	public method getIDModel()
+	public method getIDGridModel()
+	public method setModelDef()
+	public method getModelDef()
+	public method addFwModelEvent()
+	public method getFwModelEvent()
+	public method modelDef()
+	public method setTitle()
+	public method getTitle()
+	public method setLoadGrid()
+	public method getLoadGrid()
+	public method addFieldStruct()
+	public method setFieldStruct()
+	private method getStructGridModel()
+endclass
+/*/{Protheus.doc} GridDefModel::new
+Método construtor da classe
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cIdModel, character, ID do Form
+@param cIDGridModel, character, ID do grid
+/*/
+method new(cIdModel,cIDGridModel) class GridDefModel
+	_Super:new()
+	::bModelDef	   := {|oModel| oModel}
+	::cIDGridModel := cIDGridModel
+	::cIdModel     := cIdModel
+	::aModelEvent  := {}
+	::bLoadGrid    := {||}
+	::setFieldStruct()
+return
+/*/{Protheus.doc} GridDefModel::getStructGridModel
+Retorna a estrutura do grid para o Model
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return object, Retorna estrutura do model com a class FWFormModelStruct
+/*/
+method getStructGridModel() class GridDefModel
+	local oModelStruct := FWFormModelStruct():New()
+	local nField 	   := 0
+	local cTitle 	   := ""
+	local cToolTip	   := ""
+	local cIDField	   := ""
+	local cTipo		   := ""
+	local nTamanho	   := 0
+	local nDecimal	   := 0
+
+	oModelStruct:addTable("", {"FAKE_01"}, "GRID_TABLE", {|| ""})
+
+	for nField := 1 to len(::aStruct)
+		::aStruct[nField]:addField(oModelStruct)
+	next nField
+
+	for nField := 1 to len(::aFieldsTable)
+
+		cIDField	:= ::aFieldsTable[nField,1]
+
+		if !::isLoadField(cIDField)
+			loop
+		endif
+
+		cTipo		:= ::aFieldsTable[nField,2]
+		nTamanho	:= ::aFieldsTable[nField,3]
+		nDecimal	:= ::aFieldsTable[nField,4]
+		cTitle 		:= getSX3Cache(cIDField,"X3_TITULO")
+		if empty(cTitle)
+			cTitle := Capital(StrTran(cIDField,"_"," "))
+			cToolTip := cTitle
+		else
+			cToolTip	:= getSX3Cache(cIDField,"X3_DESCRIC")
+		endif
+		oModelStruct:addField(cTitle, cToolTip,cIDField, cTipo, nTamanho,nDecimal)
+	next nField
+
+return oModelStruct
+/*/{Protheus.doc} GridDefModel::modelDef
+Realiza as definições do model
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return object, Retorna o objeto do model
+/*/
+method modelDef() class GridDefModel
+	local oModel      := nil
+	local oStructFake := getTableFakeModel()
+	local bLoad       := ::getLoadGrid()
+	local bWhenTrue   := FWBuildFeature( STRUCT_FEATURE_WHEN , ".T." )
+	local nEvent      := 0
+	local cIDEvent    := ""
+	local cOwner      := ""
+	local oEvent      := nil
+
+	oModel := MPFormModel():New(::getIDModel()/*cID*/,/*bPre*/,/*bPost*/,/*bCommit*/,/*bCancel*/)
+
+	oModel:addFields("CABEC_FAKE_MODEL", /*cOwner*/, oStructFake , /*bPre*/, /*bPost*/, {||{""}}/*bLoad*/)
+	oModel:addGrid(::getIDGridModel() /*cId */,;
+		"CABEC_FAKE_MODEL" /*cOwner */,;
+		::getStructGridModel() /*oModelStruct*/,;
+	   	/*bLinePre*/,;
+	    /*bLinePost*/,;
+		/*bPre*/,;
+		/*bPost*/,;
+		bLoad)
+	oModel:setDescription(::getTitle())
+	oModel:SetOnlyQuery("CABEC_FAKE_MODEL"/*cIdForm*/,.t./*lOp*/)
+	oModel:setActivate({ |oModel| onActivate(oModel)})
+	oModel := eval(::getModelDef(),oModel)
+	if !empty(::getMarkField())
+		oModel:getModel(::getIDGridModel()):getStruct():setProperty(::getMarkField(),MODEL_FIELD_WHEN,bWhenTrue)
+	endif
+
+	for nEvent := 1 to len(::aModelEvent)
+		cIDEvent := ::aModelEvent[nEvent,1]
+		cOwner   := ::aModelEvent[nEvent,2]
+		oEvent   := ::aModelEvent[nEvent,3]
+
+		oModel:InstallEvent(cIdEvent, cOwner, oEvent)
+	next nEvent
+return oModel
+/*/{Protheus.doc} GridDefModel::getFwModelEvent
+Retorna o bloco de código com a ação que deve ser executada antes de marcar todos os registros
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@return codeblock, bloco de código com a ação que deve ser executada antes de marcar todos os registros
+/*/
+method getFwModelEvent() class GridDefModel
+return ::oFwModelEvent
+/*/{Protheus.doc} GridDefModel::addFwModelEvent
+Adiciona o objeto com a classe FwModelEvent responsável por interceptar alguns momentos do MVC como commit, após a gravação, antes da gravação e etc.
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 07/07/2021
+@param cIdEvent, character, ID do evento
+@param cOwner, character, ID do evento superior
+@param oFwModelEvent, object, Classe com o evento do modelo
+/*/
+method addFwModelEvent(cIdEvent,cOwner,oFwModelEvent) class GridDefModel
+	default oFwModelEvent := nil
+	aAdd(::aModelEvent,{cIdEvent,cOwner,oFwModelEvent})
+return
+/*/{Protheus.doc} GridDefModel::getIDGridModel
+Retorna o ID  do grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, Id do grid
+/*/
+method getIDGridModel() class GridDefModel
+return ::cIDGridModel
+/*/{Protheus.doc} GridDefModel::getIDModel
+Retorna o ID do formulario MVC
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, Retorna o ID do formulário
+/*/
+method getIDModel() class GridDefModel
+return ::cIDModel
+/*/{Protheus.doc} GridDefModel::setModelDef
+Seta bloco de código responável por receber o objeto da Model, realizar manipulações e devolver o objeto modificado
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param bModelDef, codeblock, bloco de código responável por receber o objeto da Model, realizar manipulações e devolver o objeto modificado
+/*/
+method setModelDef(bModelDef) class GridDefModel
+	::bModelDef := bModelDef
+return
+/*/{Protheus.doc} GridDefModel::getModelDef
+Retorna o bloco de código responável por receber o objeto da Model, realizar manipulações e devolver o objeto modificado
+@type method
+@version 12.1.27
+@author tiago
+@since 29/07/2021
+@return codeblock, Retorna o bloco de código responável por receber o objeto da Model, realizar manipulações e devolver o objeto modificado
+/*/
+method getModelDef() class GridDefModel
+return ::bModelDef
+/*/{Protheus.doc} GridDefModel::setTitle
+Atribui um título a tela
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param cTitle, character, Titulo da tela
+/*/
+method setTitle(cTitle) class GridDefModel
+	::cTitle := cTitle
+return
+/*/{Protheus.doc} GridDefModel::getTitle
+Retorna o título da tela
+@type method
+@version  12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return character, retorna o titulo da tela
+/*/
+method getTitle() class GridDefModel
+return ::cTitle
+/*/{Protheus.doc} GridDefModel::setLoadGrid
+Seta o bloco de código responsável por retornar array com as linhas do grid
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@param bLoadGrid, codeblock, bloco de código responsável por retornar array com as linhas do grid
+/*/
+method setLoadGrid(bLoadGrid) class GridDefModel
+    default bLoadGrid := {||}
+    ::bLoadGrid := bLoadGrid
+return
+/*/{Protheus.doc} GridDefModel::getLoadGrid
+Retorna o bloco de código responsável por retornar array com as linhas do grid
+@type method
+@version  12.1.27
+@author Tiago Faria
+@since 29/07/2021
+@return codeblock, Retorna o bloco de código responsável por retornar array com as linhas do grid
+/*/
+method getLoadGrid() class GridDefModel
+return ::bLoadGrid
+/*/{Protheus.doc} GridDefModel::addFieldStruct
+Adiciona um campo ao MVC através do objeto STRUCTMODEL
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param oStruct, object, Recebe objeto da classe StructModel com as definições do campo
+/*/
+method addFieldStruct(oStruct) class GridDefModel
+	local nPos := aScan(::aStruct,{|X|X:getIdField() == oStruct:getIdField()})
+
+	if nPos > 0
+		::aStruct[nPos] := oStruct
+	else
+		aAdd(::aStruct,oStruct)
+	endif
+return
+/*/{Protheus.doc} GridDefModel::setFieldStruct
+Recebe array de objetos StructModel com todos os campos que fazem parte do model 
+@type method
+@version 12.1.27
+@author Tiago Faria
+@since 30/07/2021
+@param aStruct, array, Array de objetos StructModel
+/*/
+method setFieldStruct(aStruct) class GridDefModel
+	default aStruct := {}
+	::aStruct := aStruct
+return
+/*
+Monta estrutura do Model de tabela falsa para servir de cabeçalho da tela MVC
+Autor: Tiago Faria
+Data: 07/07/2021
+*/
+static function getTableFakeModel()
+	local oModelStruct := FWFormModelStruct():New()
+
+	oModelStruct:addTable(""/*oJson */, {"FAKE_01"}/*aPK */, "."/*cDescription */, {|| ""}/*bRealName*/)
+	oModelStruct:addField("Field Fake 01", "Field Fake 01", "FAKE_01", "C", 15)
+return oModelStruct
+/*
+Atualiza o valor do campo FAKE_01 ao incluir para não dar erro no MVC informando que nehum campo do cabeçalho foi preenchido
+Autor: Tiago Faria
+Data: 07/07/2021
+*/
+static function onActivate(oModel)
+	if oModel:GetOperation() == MODEL_OPERATION_INSERT .or. oModel:GetOperation() == MODEL_OPERATION_UPDATE
+		FwFldPut("FAKE_01", "FAKE" , /*nLinha*/, oModel)
+	endif
+return
