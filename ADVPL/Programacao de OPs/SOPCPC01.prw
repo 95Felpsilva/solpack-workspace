@@ -10,7 +10,7 @@
 #define ALIAS_FORM0 			"ZO2"
 #define MODELO					"SOPCPC01"
 #define ID_MODEL				"SOMPCP01"
-#define TITULO_MODEL			"Programação Ordem de Produção"// + SubStr(VERSAO_ROTINA,1,17)
+#define TITULO_MODEL			"ProgramaÃ§Ã£o Ordem de ProduÃ§Ã£o"// + SubStr(VERSAO_ROTINA,1,17)
 #define TITULO_VIEW				TITULO_MODEL
 #define ID_MODEL_FORM			ALIAS_FORM0+"FORM0"
 #define ID_VIEW_FORM			"VIEW_FORM0"
@@ -22,7 +22,7 @@
 
 /*/{Protheus.doc} SOPCPC01
 
-Rotina de monitor de progração de OP
+Rotina de monitor de prograÃ§Ã£o de OP
 
 @type function	
 @author	Gabriel Pereira Santos - CRM Services
@@ -102,14 +102,14 @@ User Function SOPCPC01(aAutoCab, nOperacao)
 
 			SetKey( K_CTRL_X, bKeyCTRL_X )
 		Else
-			MsgStop("Atenção! Alias da Tabela '" + cAliasForm + "' não encontrado nesse grupo de empresa.","Solpack")
+			MsgStop("AtenÃ§Ã£o! Alias da Tabela '" + cAliasForm + "' nÃ£o encontrado nesse grupo de empresa.","Solpack")
 		Endif
 	EndIf
 
 Return lRet
 
 /*
-	Função que Define o Modelo de Dados do Cadastro
+	FunÃ§Ã£o que Define o Modelo de Dados do Cadastro
 */
 Static Function ModelDef()
 	Local cIDModel			    := ID_MODEL
@@ -155,7 +155,7 @@ Static Function ModelDef()
 Return oModel
 
 /*
-	Função que Cria a Interface do Cadastro
+	FunÃ§Ã£o que Cria a Interface do Cadastro
 */
 Static Function ViewDef()
 	Local cModelo				:= MODELO
@@ -179,20 +179,20 @@ Static Function ViewDef()
 	oView:AddField(cID0ViewForm,oStructForm,cIDModelForm)
 	oView:CreateHorizontalBox("SUPERIOR",100)
 	oView:SetOwnerView( cID0ViewForm,"SUPERIOR" )
-	oView:EnableTitleView(cID0ViewForm,"Cabeçalho")
+	oView:EnableTitleView(cID0ViewForm,"CabeÃ§alho")
 
 	/*
-	 FF_LAYOUT_VERT_DESCR_TOP - Vertical com descrição acima do get
-	 FF_LAYOUT_VERT_DESCR_LEFT - Vertical com descrição a esquerda
-	 FF_LAYOUT_HORZ_DESCR_TOP - Horizontal com descrição acima do get
-	 FF_LAYOUT_HORZ_DESCR_LEFT - Horizontal com descrição a esquerda           
+	 FF_LAYOUT_VERT_DESCR_TOP - Vertical com descriÃ§Ã£o acima do get
+	 FF_LAYOUT_VERT_DESCR_LEFT - Vertical com descriÃ§Ã£o a esquerda
+	 FF_LAYOUT_HORZ_DESCR_TOP - Horizontal com descriÃ§Ã£o acima do get
+	 FF_LAYOUT_HORZ_DESCR_LEFT - Horizontal com descriÃ§Ã£o a esquerda           
 	*/
 	oView:SetViewProperty(cID0ViewForm,"SETLAYOUT",{ FF_LAYOUT_VERT_DESCR_TOP , 5 } )
 	oView:AddUserButton( 'Atualizar Tela', 'CLIPS', {|oView| atualizaView() },'Atualiza Tela',VK_F5,,.F. )
 Return oView
 
 /*
-	Função que Monta o Menu da Rotina do Cadastro
+	FunÃ§Ã£o que Monta o Menu da Rotina do Cadastro
 */
 Static Function MenuDef()
 	Local cModelo	:= MODELO
@@ -201,11 +201,11 @@ Static Function MenuDef()
 	ADD OPTION aRotina TITLE 'Visualizar'           ACTION 'VIEWDEF.' + cModelo             OPERATION 2 ACCESS 0
 	ADD OPTION aRotina TITLE 'Alterar'           	ACTION 'VIEWDEF.' + cModelo             OPERATION 4 ACCESS 0
 	ADD OPTION aRotina TITLE 'Excluir'           	ACTION 'VIEWDEF.' + cModelo             OPERATION 5 ACCESS 0
-	ADD OPTION aRotina TITLE 'Processa Programação' ACTION 'u_PCPC01ProcessaProgramacao()'  OPERATION 6 ACCESS 0
+	ADD OPTION aRotina TITLE 'Processa ProgramaÃ§Ã£o' ACTION 'u_PCPC01ProcessaProgramacao()'  OPERATION 6 ACCESS 0
 Return aRotina
 
 /*
-	Função para Salvar os Dados do Cadastro usando MVC
+	FunÃ§Ã£o para Salvar os Dados do Cadastro usando MVC
 */ 
 Static Function saveForm(oModel)
 	Local cPrefForm		:= PREFIXO_ALIAS_FORM0
@@ -232,13 +232,13 @@ Static Function saveForm(oModel)
 	lRet := FWFormCommit(oModel)
 
 	If ( lRet )
-		Processa({|| alteraRPMOutrasOPs(cNumOP, cTear, nRPM, nProdMedia, nProdDia, cSetor, nKgHrEx, nEficie)}, "Atualizando RPM/Prod. diária...")
-		Processa({|| processaProgramacao(, cTear, cSetor)}, "Calculando datas da programaão...")
+		Processa({|| alteraRPMOutrasOPs(cNumOP, cTear, nRPM, nProdMedia, nProdDia, cSetor, nKgHrEx, nEficie)}, "Atualizando RPM/Prod. diÃ¡ria...")
+		Processa({|| processaProgramacao(, cTear, cSetor)}, "Calculando datas da programaÃ£o...")
 	EndIf
 Return lRet
 
 /*
-	Função executado no Cancelamento da Tela de Cadastro
+	FunÃ§Ã£o executado no Cancelamento da Tela de Cadastro
 */ 
 Static Function cancForm(oModel)
 	Local nOperation	:= oModel:GetOperation()
@@ -250,14 +250,14 @@ Static Function cancForm(oModel)
 Return lRet
 
 /*
-	Função para Validar os Dados Antes da Confirmação da Tela do Cadastro
+	FunÃ§Ã£o para Validar os Dados Antes da ConfirmaÃ§Ã£o da Tela do Cadastro
 */
 Static Function preValid(oModel)
 	Local lRet			:= .T.
 Return lRet
 
 /*
-	Função para Validar os Dados Após Confirmação da Tela de Cadastro - Verifica se pode incluir
+	FunÃ§Ã£o para Validar os Dados ApÃ³s ConfirmaÃ§Ã£o da Tela de Cadastro - Verifica se pode incluir
 */
 Static Function posValid(oModel)
 	Local cIDModelForm	:= ID_MODEL_FORM
@@ -277,7 +277,7 @@ Static Function posValid(oModel)
 			dbSelectArea(cAliasForm)
 			(cAliasForm)->(dbSetOrder(1))
 			If (cAliasForm)->(dbSeek(cFilCodigo+cNumOP))
-				Help(,,"HELP",,"Atenção! A regra informada '" + AllTrim(cNumOP) + "' não pode ser utilizada pois já existe na base de dados para esta filial.",1,0)
+				Help(,,"HELP",,"AtenÃ§Ã£o! A regra informada '" + AllTrim(cNumOP) + "' nÃ£o pode ser utilizada pois jÃ¡ existe na base de dados para esta filial.",1,0)
 				Break
 			Endif
 
@@ -287,7 +287,7 @@ Static Function posValid(oModel)
 Return lRet
 
 /*
-	Altera o valor de RPM e Produção diárias para demais OPs
+	Altera o valor de RPM e ProduÃ§Ã£o diÃ¡rias para demais OPs
 	Que estejam em branco
 */
 Static Function alteraRPMOutrasOPs(cOrdemProducao, cTear, nRPM, nProdMedia, nProdDia, cSetor, nKgHrEx, nEficie)
@@ -324,7 +324,7 @@ Static Function alteraRPMOutrasOPs(cOrdemProducao, cTear, nRPM, nProdMedia, nPro
 			EndIf
 			(cAliasForm)->(MsUnlock())
 
-			(cAliasForm)->(dbCloseArea())
+			// (cAliasForm)->(dbCloseArea()) // Removido para evitar fechar a tabela dentro do loop
 
 			(cAlias)->(dbSkip())
 		EndDo
@@ -337,13 +337,13 @@ Static Function alteraRPMOutrasOPs(cOrdemProducao, cTear, nRPM, nProdMedia, nPro
 Return
 
 /*
-	Rotina para processar reprogramação de datas da OP em massa
+	Rotina para processar reprogramaÃ§Ã£o de datas da OP em massa
 */
 User Function PCPC01ProcessaProgramacao(lIsJob)
 	Local cPrefForm		:= PREFIXO_ALIAS_FORM0
 	Local cCpoTear		:= cPrefForm+"_TEAR"
 	Local cTear			:= Space(GetSx3Cache(cCpoTear,"X3_TAMANHO"))
-	Local cTitle		:= "Processar Programção de Datas"
+	Local cTitle		:= "Processar ProgramÃ§Ã£o de Datas"
 	Local cQuery		:= ""
 	Local cAlias		:= ""
 	Local aParamBox     := {}
@@ -352,7 +352,7 @@ User Function PCPC01ProcessaProgramacao(lIsJob)
 
 	aAdd(aParamBox, {2, "Setor", "1", {"G0=G0","G1=G1","G2=G2","G3=G3"}, 80, ".T." , .T.})
 	aAdd(aParamBox, {1, "Tear de", 	cTear, "", "", "", ".T.", 80, .F.})
-	aAdd(aParamBox, {1, "Tear até", cTear, "", "!Empty(MV_PAR02)", "", ".T.", 80, .T.})
+	aAdd(aParamBox, {1, "Tear atÃ©", cTear, "", "!Empty(MV_PAR02)", "", ".T.", 80, .T.})
 
 	If ( lIsJob )
 		cQuery := getQryTearDisponivel(lIsJob)
@@ -367,13 +367,13 @@ User Function PCPC01ProcessaProgramacao(lIsJob)
 
 		If (cAlias)->(!Eof())
 			While (cAlias)->(!Eof())
-				Processa({|| processaProgramacao(,(cAlias)->TEAR, (cAlias)->SETOR)}, "Calculando datas da programação...")
+				Processa({|| processaProgramacao(,(cAlias)->TEAR, (cAlias)->SETOR)}, "Calculando datas da programaÃ§Ã£o...")
 				(cAlias)->(dbSkip())
 			EndDo
 
 			FwAlertSuccess("Processo finalizado com sucesso!", "Solpack")
 		Else
-			FwAlertError("Nenhum tear disponível para processamento com os parâmetros informados", "Solpack")
+			FwAlertError("Nenhum tear disponÃ­vel para processamento com os parÃ¢metros informados", "Solpack")
 		EndIf
 
 		(cAlias)->(dbCloseArea())
@@ -381,7 +381,7 @@ User Function PCPC01ProcessaProgramacao(lIsJob)
 Return
 
 /*
-	Monta query de teares disponíveis para reprocessamento de data
+	Monta query de teares disponÃ­veis para reprocessamento de data
 */
 Static Function getQryTearDisponivel(lIsJob, cSetor, cTearDe, cTearAte)
 	Local cAliasForm 	:= ALIAS_FORM0
@@ -411,11 +411,14 @@ Static Function getQryTearDisponivel(lIsJob, cSetor, cTearDe, cTearAte)
 Return cQuery
 
 /*
-	Rotina responsável por realizar cálculo da programação das datas com controle de saldo de capacidade diária
+	Rotina responsÃ¡vel por realizar cÃ¡lculo da programaÃ§Ã£o das datas com controle de saldo de capacidade diÃ¡ria
 */
 Static Function processaProgramacao(cNumOP, cTear, cSetor)
 	Local cAliasForm 	:= ALIAS_FORM0
 	Local cPriorAnt		:= ""
+	Local cPrior        := ""
+	Local dIniPrior     := STOD("")
+	Local dMaxFimPrior  := STOD("")
 	Local lAtivo		:= GetNewPar("ES_ATVCADT", .T.)
 	Local lProcessa		:= .F.
 	Local nRecord		:= 0
@@ -425,13 +428,10 @@ Static Function processaProgramacao(cNumOP, cTear, cSetor)
 	Local aArea  		:= FWGetArea()
 	Local aAreas 		:= Lj7GetArea({cAliasForm})
 	Local dPrimeiroAp	:= STOD("")
-	Local dDiaAtual     := STOD("")
-	Local nSaldoCapDia  := 0
 	Local nCapDiaria    := 0
 	Local nQtdFalt      := 0
 	Local nRest         := 0
 	Local dCalcData     := STOD("")
-	Local nCalcSaldo    := 0
 
 	Default cNumOP		:= ""
 	Default cTear		:= ""
@@ -442,19 +442,22 @@ Static Function processaProgramacao(cNumOP, cTear, cSetor)
 
 		While !(cAlias)->(Eof())
 			nRecord++
+			cPrior := Alltrim(cValToChar((cAlias)->PRIORIDADE))
 
 			dPrimeiroAp := getFirstApont((cAlias)->NUMOP)
 
 			If nRecord == 1
 				nProdDiaria := (cAlias)->PRODIARIA
 				If Empty(nProdDiaria)
-					FwAlertError("OP " + (cAlias)->NUMOP + " não está com a produção diária definida, não será possível realizar a programação das datas.", "Solpack")
+					FwAlertError("OP " + (cAlias)->NUMOP + " nÃ£o estÃ¡ com a produÃ§Ã£o diÃ¡ria definida, nÃ£o serÃ¡ possÃ­vel realizar a programaÃ§Ã£o das datas.", "Solpack")
 					Exit
 				EndIf
-				dDiaAtual := STOD((cAlias)->DATAINI)
-				If Empty(dDiaAtual)
-					dDiaAtual := Date()
+				dIniPrior := STOD((cAlias)->DATAINI)
+				If Empty(dIniPrior)
+					dIniPrior := Date()
 				EndIf
+				cPriorAnt    := cPrior
+				dMaxFimPrior := dIniPrior
 			EndIf
 
 			If !Empty(cNumOP) .And. !lProcessa
@@ -474,64 +477,55 @@ Static Function processaProgramacao(cNumOP, cTear, cSetor)
 					nQtdFalt := 0
 				EndIf
 
-				If nRecord == 1 .And. nSaldoCapDia <= 0
-					nSaldoCapDia := nCapDiaria
+				// Se mudou a prioridade, o novo grupo inicia no maior tÃ©rmino da prioridade anterior
+				If cPrior != cPriorAnt
+					dIniPrior    := dMaxFimPrior
+					cPriorAnt    := cPrior
+					dMaxFimPrior := dIniPrior
 				EndIf
 
+				// DefiniÃ§Ã£o da Data Inicial da OP:
 				If !Empty(dPrimeiroAp)
-					dDataIni  := dPrimeiroAp
-					dDiaAtual := dPrimeiroAp
+					dDataIni := dPrimeiroAp
 				Else
-					If Empty(dDiaAtual)
-						dDiaAtual := Date()
-					EndIf
-
-					If nSaldoCapDia <= 0
-						dDiaAtual    := somaDiasUteis(dDiaAtual, 2)
-						nSaldoCapDia := nCapDiaria
-					EndIf
-
-					dDataIni := dDiaAtual
+					dDataIni := dIniPrior
 				EndIf
 
 				If Empty(dPrimeiroAp) .And. dDataIni < Date()
 					dDataIni  := Date()
-					dDiaAtual := Date()
+					dIniPrior := Date()
 				EndIf
 
-				// Cálculo da data final e distribuição do saldo de capacidade diária
-				nRest      := nQtdFalt
-				dCalcData  := dDataIni
-				nCalcSaldo := nSaldoCapDia
+				// CÃ¡lculo da data final
+				nRest     := nQtdFalt
+				dCalcData := dDataIni
 
-				If nRest <= nCalcSaldo
-					if dCalcData < Date()
-						dDataFim 	:= Date()
-						dDiaAtual	:= Date()
-					else
-						dDataFim     := dCalcData
-						dDiaAtual    := dCalcData
-					endif
+				If nRest > 0 .And. dCalcData < Date()
+					dCalcData := Date()
+				EndIf
 
-					nCalcSaldo   := nCalcSaldo - nRest
-					nSaldoCapDia := nCalcSaldo
+				If nRest <= nCapDiaria
+					dDataFim := dCalcData
 				Else
-					nRest      := nRest - nCalcSaldo
-					nCalcSaldo := 0
-
+					nRest -= nCapDiaria
 					While nRest > 0
 						dCalcData := somaDiasUteis(dCalcData, 2)
 						If nRest <= nCapDiaria
-							dDataFim     := dCalcData
-							nCalcSaldo   := nCapDiaria - nRest
-							nRest        := 0
+							dDataFim := dCalcData
+							nRest    := 0
 						Else
-							nRest        := nRest - nCapDiaria
+							nRest    -= nCapDiaria
 						EndIf
 					EndDo
+				EndIf
 
-					dDiaAtual    := dCalcData
-					nSaldoCapDia := nCalcSaldo
+				If nQtdFalt > 0 .And. dDataFim < Date()
+					dDataFim := Date()
+				EndIf
+
+				// Guarda o maior tÃ©rmino entre as OPs da mesma prioridade
+				If Empty(dMaxFimPrior) .Or. dDataFim > dMaxFimPrior
+					dMaxFimPrior := dDataFim
 				EndIf
 
 				(cAliasForm)->(dbSetOrder(2))
@@ -541,18 +535,17 @@ Static Function processaProgramacao(cNumOP, cTear, cSetor)
 					(cAliasForm)->&(cAliasForm+"_DATPRF") 	:= dDataFim
 					(cAliasForm)->(MSUnlock())
 				EndIf
-				(cAliasForm)->(dbCloseArea())
 			Else
 				dDataFim := STOD((cAlias)->DATAFIM)
+				If Empty(dMaxFimPrior) .Or. dDataFim > dMaxFimPrior
+					dMaxFimPrior := dDataFim
+				EndIf
 			EndIf
-
-			cPriorAnt := (cAlias)->PRIORIDADE
 
 			(cAlias)->(dbSkip())
 		EndDo
 
 		(cAlias)->(dbCloseArea())
-
 	EndIf
 
 	Lj7RestArea(aAreas)
@@ -634,14 +627,14 @@ Static Function getQryFirstApont(cOrdem)
 Return cQuery
 
 /*
-	Função de Validação executada na Ativação do Modelo
+	FunÃ§Ã£o de ValidaÃ§Ã£o executada na AtivaÃ§Ã£o do Modelo
 */
 Static Function activeForm(oModel)
 	Local lRet				:= .T.
 Return lRet
 
 /*
-	Função para adicionar gatilho a campo do field
+	FunÃ§Ã£o para adicionar gatilho a campo do field
 */
 Static Function FieldTrigger(oModel,cField,uVal)
 	Local oView     			:= FwViewActive()
@@ -733,7 +726,7 @@ Static Function FieldTrigger(oModel,cField,uVal)
 Return uVal
 
 /*
-	Cálcula quantidade a ser produzida 
+	CÃ¡lcula quantidade a ser produzida 
 */
 Static Function getQtdProduzir(cCodProduto, cNumOP, nMultiProd, nQtdRPM, nPorcProdutividade)
 	Local cTipoProduto			:= ""
@@ -757,13 +750,13 @@ Static Function getQtdProduzir(cCodProduto, cNumOP, nMultiProd, nQtdRPM, nPorcPr
 		cTipoProduto := Posicione("SB1",1,xFilial("SB1")+cCodProduto, "B1_XTPPROD")
 
 		If ( Empty(cTipoProduto) )
-			FwAlertError("Produto " + cCodProduto + " não tem tipo (Tela/Embalagem/Redinha) definido no cadastro de produto. Não será possível cálcular produção diária", "Solpack" )
+			FwAlertError("Produto " + cCodProduto + " nÃ£o tem tipo (Tela/Embalagem/Redinha) definido no cadastro de produto. NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 			Break
 		EndIf
 
 		nPonto := getAtributoByProduto(cCodProduto, cAtrPonto)
 		If ( Empty(nPonto) )
-			FwAlertError("Não foi possível buscar o valor de ponto do produto " + cCodProduto + ", verifique se o atributo de ponto esta cadastrado na ficha técnica. Não será possível cálcular produção diária", "Solpack" )
+			FwAlertError("NÃ£o foi possÃ­vel buscar o valor de ponto do produto " + cCodProduto + ", verifique se o atributo de ponto esta cadastrado na ficha tÃ©cnica. NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 			Break
 		EndIf
 
@@ -773,14 +766,14 @@ Static Function getQtdProduzir(cCodProduto, cNumOP, nMultiProd, nQtdRPM, nPorcPr
 		EndIf
 		nTipoTear	:= Val(Posicione("SH1",1,xFilial("SH1")+cCodRecurso, "H1_ZZTPTEA"))
 		If ( Empty(nTipoTear) )
-			FwAlertError("O tipo de tear não foi definido para o recurso " + cCodRecurso + ". Não será possível cálcular produção diária", "Solpack" )
+			FwAlertError("O tipo de tear nÃ£o foi definido para o recurso " + cCodRecurso + ". NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 			Break
 		EndIf
 
 		If cTipoProduto == "1" //Tela
 			nComprimentoTela := getAtributoByProduto(cCodProduto, cAtrCompTela, .T.)
 			If ( Empty(nComprimentoTela) )
-				FwAlertError("Não foi possível buscar o valor de comprimento de tela do produto " + cCodProduto + ", verifique se o atributo de comprimento de tela esta cadastrado na ficha técnica. Não será possível cálcular produção diária", "Solpack" )
+				FwAlertError("NÃ£o foi possÃ­vel buscar o valor de comprimento de tela do produto " + cCodProduto + ", verifique se o atributo de comprimento de tela esta cadastrado na ficha tÃ©cnica. NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 				Break
 			EndIf
 
@@ -794,25 +787,25 @@ Static Function getQtdProduzir(cCodProduto, cNumOP, nMultiProd, nQtdRPM, nPorcPr
 
 			nLargEmbalagem := getAtributoByProduto(cCodProduto, cAtrLargEmbalagem)
 			If ( Empty(nLargEmbalagem) )
-				FwAlertError("Não foi possível buscar o valor de largura da embalagem do produto " + cCodProduto + ", verifique se o atributo de largura da embalagem esta cadastrado na ficha técnica. Não será possível cálcular produção diária", "Solpack" )
+				FwAlertError("NÃ£o foi possÃ­vel buscar o valor de largura da embalagem do produto " + cCodProduto + ", verifique se o atributo de largura da embalagem esta cadastrado na ficha tÃ©cnica. NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 				Break
 			EndIf
 
 			nCostura := Posicione("SB1",1,xFilial("SB1")+cCodProduto, "B1_ZZQTPCO")
 			If ( Empty(nCostura) )
-				FwAlertError("O valor de costura esta zerado no cadastro do produto " + cCodProduto + ". Não será possível cálcular produção diária", "Solpack" )
+				FwAlertError("O valor de costura esta zerado no cadastro do produto " + cCodProduto + ". NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 				Break
 			EndIf
 
 			nCaida := getAtributoByProduto(cCodProduto, cAtrCaida)
 			If ( Empty(nCaida) )
-				FwAlertError("Não foi possível buscar o valor de caída do produto " + cCodProduto + ", verifique se o atributo de caída esta cadastrado na ficha técnica. Não será possível cálcular produção diária", "Solpack" )
+				FwAlertError("NÃ£o foi possÃ­vel buscar o valor de caÃ­da do produto " + cCodProduto + ", verifique se o atributo de caÃ­da esta cadastrado na ficha tÃ©cnica. NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 				Break
 			EndIf
 
 			nQtdPrograma := Posicione("SB1",1,xFilial("SB1")+cCodProduto, "B1_ZZQTPRO")
 			If ( Empty(nQtdPrograma) )
-				FwAlertError("A quantidade de programção no cadastro do produto " + cCodProduto + " não foi preenchida. Não será possível cálcular produção diária", "Solpack" )
+				FwAlertError("A quantidade de programÃ§Ã£o no cadastro do produto " + cCodProduto + " nÃ£o foi preenchida. NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 				Break
 			EndIf
 
@@ -827,14 +820,14 @@ Static Function getQtdProduzir(cCodProduto, cNumOP, nMultiProd, nQtdRPM, nPorcPr
 
 			nComprimentoTela := getAtributoByProduto(cCodProduto, cAtrCompTela, .T.)
 			If ( Empty(nComprimentoTela) )
-				FwAlertError("Não foi possível buscar o valor de comprimento de tela do produto " + cCodProduto + ", verifique se o atributo de comprimento de tela esta cadastrado na ficha técnica. Não será possível cálcular produção diária", "Solpack" )
+				FwAlertError("NÃ£o foi possÃ­vel buscar o valor de comprimento de tela do produto " + cCodProduto + ", verifique se o atributo de comprimento de tela esta cadastrado na ficha tÃ©cnica. NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 				Break
 			EndIf
 
 			nMetroLinear 		:= ( nQtdRPM / nTipoTear * 0.6 ) / nPonto * 24 * ( nPorcProdutividade / 100 )
 			nQtdProduzir 		:= ( nMetroLinear / nComprimentoTela )
 		Else
-			FwAlertError("Tipo de produto (Tela/Embalagem/Redinha) definido para o produto " + cCodProduto + " é inválido. Não será possível cálcular produção diária", "Solpack" )
+			FwAlertError("Tipo de produto (Tela/Embalagem/Redinha) definido para o produto " + cCodProduto + " Ã© invÃ¡lido. NÃ£o serÃ¡ possÃ­vel cÃ¡lcular produÃ§Ã£o diÃ¡ria", "Solpack" )
 			Break
 		EndIf
 
@@ -846,7 +839,7 @@ Static Function getQtdProduzir(cCodProduto, cNumOP, nMultiProd, nQtdRPM, nPorcPr
 Return nQtdProduzir
 
 /*
-	Rotina para buscar valor de atributo da ficha técnica do produto
+	Rotina para buscar valor de atributo da ficha tÃ©cnica do produto
 */
 Static Function getAtributoByProduto(cCodProduto, cAtributo, lComprimento)
 	Local nVlrAtb			:= 0
@@ -907,7 +900,7 @@ Static Function getQryAtributo(cCodProduto, cAtributo)
 Return cQuery
 
 /*
-	Rotina genérica para testar integração a rotina de programação de OP
+	Rotina genÃ©rica para testar integraÃ§Ã£o a rotina de programaÃ§Ã£o de OP
 */
 User Function tstProgOP()
 	Local lRet                  := .F.
@@ -919,7 +912,7 @@ User Function tstProgOP()
 Return lRet
 
 /*
-	Rotina para integrar OP ao processo de programção de OP
+	Rotina para integrar OP ao processo de programÃ§Ã£o de OP
 */
 User Function PCP01GeraProgramacao(cOrdemProducao)
 	Local cAliasForm	:= ALIAS_FORM0
@@ -973,7 +966,7 @@ User Function PCP01GeraProgramacao(cOrdemProducao)
 Return lRet
 
 /*
-	Avalia se pode ser executado um determinado bloco de código.
+	Avalia se pode ser executado um determinado bloco de cÃ³digo.
 */
 Static Function podeExecutar(cOrdemProducao, nTipoOperacao)
 	Local cAliasForm	:= ALIAS_FORM0
@@ -983,12 +976,12 @@ Static Function podeExecutar(cOrdemProducao, nTipoOperacao)
 	Begin Sequence
 
 		If !( lActive )
-			cMsg := "Rotina de integração com programação de OP não está ativa, parâmetro ES_ATVPC01"
+			cMsg := "Rotina de integraÃ§Ã£o com programaÃ§Ã£o de OP nÃ£o estÃ¡ ativa, parÃ¢metro ES_ATVPC01"
 			Break
 		EndIf
 
 		If !( FwAliasInDic(cAliasForm) )
-			cMsg := "Tabela " + cAliasForm + " não foi criada no ambiente."
+			cMsg := "Tabela " + cAliasForm + " nÃ£o foi criada no ambiente."
 			Break
 		EndIf
 
@@ -998,7 +991,7 @@ Static Function podeExecutar(cOrdemProducao, nTipoOperacao)
 Return lRet
 
 /*
-	Monta query de informações a serem preenchidas na programação de OP
+	Monta query de informaÃ§Ãµes a serem preenchidas na programaÃ§Ã£o de OP
 */
 Static Function getQryOPProgramacao(cOrdemProducao)
 	Local cQuery		:= ""
@@ -1072,7 +1065,7 @@ Static Function getQryOPProgramacao(cOrdemProducao)
 Return cQuery
 
 /*
-	Rotina para atualizar processo de programção de OP
+	Rotina para atualizar processo de programÃ§Ã£o de OP
 */
 User Function PCP01AtualizaProgramacao(cOrdemProducao)
 	Local cAliasForm		:= ALIAS_FORM0
@@ -1126,10 +1119,10 @@ User Function PCP01AtualizaProgramacao(cOrdemProducao)
 				(cAliasForm)->&(cAliasForm+"_ZQTOP1") 	:= nQtOper2
 				(cAliasForm)->&(cAliasForm+"_CONV") 	:= (cAliasQry)->B1_CONV
 				If Alltrim((cAliasQry)->C2_ZZSETOR) == "G0"
-				(cAliasForm)->&(cAliasForm+"_TEAR") 	:= Alltrim((cAliasQry)->C2_ZRECORI)
-			Else
-				(cAliasForm)->&(cAliasForm+"_TEAR") 	:= Right(Alltrim((cAliasQry)->C2_ZZTEAR), 2)
-			EndIf
+					(cAliasForm)->&(cAliasForm+"_TEAR") 	:= Alltrim((cAliasQry)->C2_ZRECORI)
+				Else
+					(cAliasForm)->&(cAliasForm+"_TEAR") 	:= Right(Alltrim((cAliasQry)->C2_ZZTEAR), 2)
+				EndIf
 				(cAliasForm)->&(cAliasForm+"_RECDES") 	:= Alltrim((cAliasQry)->H1_DESCRI)
 				(cAliasForm)->&(cAliasForm+"_SETOR") 	:= (cAliasQry)->C2_ZZSETOR
 				(cAliasForm)->&(cAliasForm+"_DATPRI") 	:= IIF(!Empty((cAliasQry)->H6_DATAINI), STOD((cAliasQry)->H6_DATAINI), STOD((cAliasQry)->C2_DATPRI))
@@ -1234,7 +1227,7 @@ Static Function getQryOPByStatus(cOrdemProducao, cTear, cSetor, cStatus)
 Return cQuery
 
 /*
-	Rotina para excluir programção de OP
+	Rotina para excluir programÃ§Ã£o de OP
 */
 User Function PCP01ExcluiProgramacao(cOrdemProducao)
 	Local cAliasForm	:= ALIAS_FORM0
@@ -1251,7 +1244,7 @@ User Function PCP01ExcluiProgramacao(cOrdemProducao)
 Return lRet
 
 /*
-	Rotina para encerrar processo de programção de OP
+	Rotina para encerrar processo de programÃ§Ã£o de OP
 */
 User Function PCP01EncerraProgramacao(cOrdemProducao)
 	Local cAliasForm	:= ALIAS_FORM0
@@ -1342,7 +1335,7 @@ Static Function atualizaView()
 Return
 
 /*
-	Função que executa a carga dos dados no Formato aAutoCab
+	FunÃ§Ã£o que executa a carga dos dados no Formato aAutoCab
 */
 Static Function runAutoExecute(aAutoCab,nOperacao)
 	Local cAliasForm 	:= ALIAS_FORM0
@@ -1368,7 +1361,7 @@ Static Function runAutoExecute(aAutoCab,nOperacao)
 Return lRet
 
 /*
-    Captura o erro que ocorreu no processamento da rotina automática
+    Captura o erro que ocorreu no processamento da rotina automÃ¡tica
 */
 Static Function getError(oModel)
 	Local aErro := oModel:GetErrorMessage()
@@ -1381,7 +1374,7 @@ Static Function getError(oModel)
 Return cErro
 
 /*
-	Tratamento de Logs para Rotina Automática e pela Interface com Solução
+	Tratamento de Logs para Rotina AutomÃ¡tica e pela Interface com SoluÃ§Ã£o
 */
 Static Function addLogs(cLogs,cSolucao,lRet)
 	Local aSolucao 	:= {}
@@ -1397,7 +1390,7 @@ Static Function addLogs(cLogs,cSolucao,lRet)
 Return
 
 /*
-	Função Interna que Soma Dias Úteis
+	FunÃ§Ã£o Interna que Soma Dias Ãšteis
 */
 User Function somDiasUteis(dDataRef,nDiasUteisUteis,lUseDataValida)
 	Local dDataUtil				:= CtoD("")
