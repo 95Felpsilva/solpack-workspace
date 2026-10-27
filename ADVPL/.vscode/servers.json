@@ -6,32 +6,7 @@
 	"permissions": {
 		"authorizationtoken": ""
 	},
-	"connectedServer": {
-		"id": "3remxkfww5km795lsbnetikste2afv",
-		"type": "totvs_server_protheus",
-		"name": "Producao_Compila",
-		"port": 1255,
-		"address": "localhost",
-		"buildVersion": "7.00.240223P",
-		"secure": false,
-		"includes": [
-			"E:\\totvs\\protheus\\producao\\protheus12\\include"
-		],
-		"environments": [
-			"COMPILA",
-			"PRODUCAO",
-			"COMPILA_TOTVS"
-		],
-		"username": "protheus",
-		"environment": "COMPILA",
-		"token": "djM6M3JlbXhrZnd3NWttNzk1bHNibmV0aWtzdGUyYWZ2OjE6bG9jYWxob3N0OjEyNTU6MDo3LjAwLjI0MDIyM1A6Mw==:djE6Q09NUElMQTpwcm90aGV1czo3N2tCVHlsSU5PcEYyUytCR3luSXRjSGkzZWpEWCtlQjZZaERBaXN2WWFNPQ==|djI6MTc5MjUwMTE1MjowOjE6MQ==.S4Vm2HNqQj3lGZaD8hUfZiv8Vu5cFTw6RrZMBUuJCdCoru5Qnrdk9bGD4pird7n2Omphs4e7/eq6u47l7K0R6FHaAzYV0gl3+TQqXfl4+Vb4u1VX5L2T9dWsDmSTKQDHze+l58oiLbuAfpKaPy4qPFWUoHWsLuHhfjEzEbIbhQPhU6x3b2Dc2GKsdr12oKT9vuQvltEsJJjvr+SSiEVcb3EmA/cQSCtb8UH2RAOeLN6qQwJRgWv9AUeTiqMOKATfM7pe32OvwAK+yhLXmnkivkAIPQlubVka2qTtWlRPs6OIdf/fXy5HKUT/LvXPYq590zluu6HtCqqiQoLD9/sGJg==",
-		"informations": {
-			"permissions": [],
-			"errorMessage": "",
-			"environmentDetectedType": "totvs_server_protheus",
-			"serverDetectedType": "totvs_server_protheus"
-		}
-	},
+	"connectedServer": {},
 	"configurations": [
 		{
 			"id": "pfga4ue50glgv6rugo83r6ouuwrfm",
